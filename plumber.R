@@ -28,13 +28,13 @@ function(a, b){
 #* @html
 function(req, res) {
   res$status <- 303 # redirect
-  res$setHeader("Location", "./__swagger__")
+  res$setHeader("Location", "./__swagger__/")
   "<html>
   <head>
-    <meta http-equiv=\"Refresh\" content=\"0; url=./__swagger__\" />
+    <meta http-equiv=\"Refresh\" content=\"0; url=./__swagger__/\" />
   </head>
   <body>
-    <p>For documentation on this API, please visit <a href=\"http://api.ships4whales.org/__swagger__\">http://api.ships4whales.org/__swagger__</a>.</p>
+    <p>For documentation on this API, please visit <a href=\"http://api.ships4whales.org/__swagger__/\">http://api.ships4whales.org/__swagger__/</a>.</p>
   </body>
 </html>"
 }
