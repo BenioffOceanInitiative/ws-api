@@ -1,4 +1,59 @@
-# plumber.R
+library(here) # TODO: depend on here in whalesafe4r
+library(glue)
+library(DBI)
+library(dplyr)
+# library(lubridate)
+# here <- here::here
+
+#library(s4wr)                 # normal:    load installed library
+devtools::load_all("~/whalesafe4r") # developer: load source library
+
+# connect to database
+db_yml <- here(".amazon_rds.yml")
+con    <- db_connect(db_yml)
+
+#* Echo back the input
+#* @param sort_by field to sort by; default = operator
+#* @param n_perpage number of rows per page of results; default = 20
+#* @param page page of results; default = 1
+#* @get /operators
+function(sort_by="operator", n_perpage = 20, page = 1){
+  # sort_by = "operator"; n_perpage = "20"; page = "1"
+  
+  n_perpage <- as.integer(n_perpage)
+  page      <- as.integer(page)
+  
+  # eg page 2: 21 to 30
+  n_beg = (page - 1) * n_perpage + 1
+  n_end = n_beg + n_perpage - 1
+  
+  operators <- tbl(con, "operator_stats")
+  
+  operators %>% 
+    #arrange(!!sort_by) %>% 
+    #slice(n_beg:n_end) %>% 
+    mutate(
+      row_n = row_number()) %>% 
+    filter(
+      row_n >= !!n_beg,
+      row_n <= !!n_end) %>% 
+    ##collect()
+    select(operator, 
+           grade, 
+           `compliance score (reported speed)`, 
+           `total distance (km)`, 
+           `total distance (nautcal miles)`, 
+           `distance (nautcal miles) under 10 knots`, 
+           `distance (nautcal miles) over 10 knots`) %>% 
+    collect()
+  #names(tbl(con, "operator_stats") %>% head() %>% collect())
+}
+
+
+# DBI::dbListTables(con)
+operators <- tbl(con, "operator_stats")
+operators
+
 
 #* Echo back the input
 #* @param msg The message to echo
@@ -8,10 +63,11 @@ function(msg=""){
 }
 
 #* Plot a histogram
+#* @param n number of observations to feed into rnorm()
 #* @png
 #* @get /plot
-function(){
-  rand <- rnorm(100)
+function(n=100){
+  rand <- rnorm(n)
   hist(rand)
 }
 
