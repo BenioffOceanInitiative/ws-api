@@ -46,14 +46,7 @@ function(sort_by="operator", n_perpage = 20, page = 1){
            `distance (nautcal miles) under 10 knots`, 
            `distance (nautcal miles) over 10 knots`) %>% 
     collect()
-  #names(tbl(con, "operator_stats") %>% head() %>% collect())
 }
-
-
-# DBI::dbListTables(con)
-operators <- tbl(con, "operator_stats")
-operators
-
 
 #* Echo back the input
 #* @param msg The message to echo
