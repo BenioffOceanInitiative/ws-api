@@ -5,8 +5,10 @@ library(dplyr)
 # library(lubridate)
 # here <- here::here
 
+setwd("/srv/ws-api")
+
 #library(s4wr)                 # normal:    load installed library
-devtools::load_all("~/whalesafe4r") # developer: load source library
+devtools::load_all("/srv/whalesafe4r") # developer: load source library
 
 # connect to database
 db_yml <- here(".amazon_rds.yml")
