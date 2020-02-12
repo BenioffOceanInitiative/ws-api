@@ -3,16 +3,13 @@ library(glue)
 library(DBI)
 library(dplyr)
 library(sf)
-#library(geojsonio)
 library(geojsonsf)
 library(jsonlite)
-# library(lubridate)
-# here <- here::here
 
 dir_api <- "/srv/ws-api"
 db_yml  <- file.path(dir_api, ".amazon_rds.yml")
 
-#library(s4wr)                 # normal:    load installed library
+# library(s4wr)                        # normal:    load installed library
 devtools::load_all("/srv/whalesafe4r") # developer: load source library
 
 # connect to database
@@ -35,15 +32,13 @@ function(sort_by="operator", n_perpage = 20, page = 1){
   
   operators <- tbl(con, "operator_stats")
   
-  operators %>% 
+  d <- operators %>% 
     #arrange(!!sort_by) %>% 
-    #slice(n_beg:n_end) %>% 
     mutate(
       row_n = row_number()) %>% 
     filter(
       row_n >= !!n_beg,
       row_n <= !!n_end) %>% 
-    ##collect()
     select(operator, 
            grade, 
            `compliance score (reported speed)`, 
@@ -52,6 +47,17 @@ function(sort_by="operator", n_perpage = 20, page = 1){
            `distance (nautcal miles) under 10 knots`, 
            `distance (nautcal miles) over 10 knots`) %>% 
     collect()
+  
+  n_records <- operators %>% 
+    summarize(n = n()) %>% 
+    collect() %>% 
+    pull(n)
+  n_pages <- n_records %/% n_perpage + 
+    ifelse(n_records %% n_perpage > 0, 1, 0)
+  attr(d, "n_records") <- n_records
+  attr(d, "n_pages")   <- n_pages
+  
+  d
 }
 
 # TODO: @get /ships_by_operator
@@ -65,17 +71,14 @@ function(sort_by="operator", n_perpage = 20, page = 1){
 #* @get /ship_segments
 function(mmsi){
   
-  #function(mmsi = "248896000", date_beg=NULL, date_end=NULL, bbox = NULL){
-  
-  #mmsi <- dbGetQuery(con, "SELECT mmsi FROM vsr_segments LIMIT 1;") %>% as.integer()
-  
+  # mmsi = "248896000"; date_beg=NULL; date_end=NULL; bbox = NULL
+
   segs <- st_read(dsn = con, query = glue("SELECT * FROM vsr_segments WHERE mmsi = {mmsi};"))
   
   #if (!is.null(date_beg))
   # TODO: convert date_beg to date, and check that it's a date
   #segs <- filter(segs, date(beg_dt) >= date_beg)
   
-  #sf_geojson(segs) %>% prettify() %>% cat() # %>% jsonlite::toJSON()
   sf_geojson(segs) 
 }
 
