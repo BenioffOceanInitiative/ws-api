@@ -5,6 +5,7 @@ library(dplyr)
 library(sf)
 #library(geojsonio)
 library(geojsonsf)
+library(jsonlite)
 # library(lubridate)
 # here <- here::here
 
@@ -60,8 +61,10 @@ function(sort_by="operator", n_perpage = 20, page = 1){
 #* @param date_beg begin date
 #* @param date_end end date
 #* @param bbox bounding box in decimal degrees: lon_min,lat_min,lon_max,lat_max
+#* @serializer contentType list(type="application/json")
 #* @get /ship_segments
 function(mmsi){
+  
   #function(mmsi = "248896000", date_beg=NULL, date_end=NULL, bbox = NULL){
   
   #mmsi <- dbGetQuery(con, "SELECT mmsi FROM vsr_segments LIMIT 1;") %>% as.integer()
@@ -69,12 +72,13 @@ function(mmsi){
   segs <- st_read(dsn = con, query = glue("SELECT * FROM vsr_segments WHERE mmsi = {mmsi};"))
   
   #if (!is.null(date_beg))
-    # TODO: convert date_beg to date, and check that it's a date
-   #segs <- filter(segs, date(beg_dt) >= date_beg)
+  # TODO: convert date_beg to date, and check that it's a date
+  #segs <- filter(segs, date(beg_dt) >= date_beg)
   
-  sf_geojson(segs)
+  #sf_geojson(segs) %>% prettify() %>% cat() # %>% jsonlite::toJSON()
+  sf_geojson(segs) 
 }
-  
+
 
 
 #* Echo back the input
