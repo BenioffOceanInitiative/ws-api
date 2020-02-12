@@ -2,6 +2,9 @@ library(here) # TODO: depend on here in whalesafe4r
 library(glue)
 library(DBI)
 library(dplyr)
+library(sf)
+#library(geojsonio)
+library(geojsonsf)
 # library(lubridate)
 # here <- here::here
 
@@ -14,7 +17,7 @@ devtools::load_all("/srv/whalesafe4r") # developer: load source library
 # connect to database
 con    <- db_connect(db_yml)
 
-#* Echo back the input
+#* List ship operators
 #* @param sort_by field to sort by; default = operator
 #* @param n_perpage number of rows per page of results; default = 20
 #* @param page page of results; default = 1
@@ -49,6 +52,30 @@ function(sort_by="operator", n_perpage = 20, page = 1){
            `distance (nautcal miles) over 10 knots`) %>% 
     collect()
 }
+
+# TODO: @get /ships_by_operator
+
+#* Return GeoJSON by ship
+#* @param mmsi AIS ship ID
+#* @param date_beg begin date
+#* @param date_end end date
+#* @param bbox bounding box in decimal degrees: lon_min,lat_min,lon_max,lat_max
+#* @get /ship_segments
+function(mmsi){
+  #function(mmsi = "248896000", date_beg=NULL, date_end=NULL, bbox = NULL){
+  
+  #mmsi <- dbGetQuery(con, "SELECT mmsi FROM vsr_segments LIMIT 1;") %>% as.integer()
+  
+  segs <- st_read(dsn = con, query = glue("SELECT * FROM vsr_segments WHERE mmsi = {mmsi};"))
+  
+  #if (!is.null(date_beg))
+    # TODO: convert date_beg to date, and check that it's a date
+   #segs <- filter(segs, date(beg_dt) >= date_beg)
+  
+  sf_geojson(segs)
+}
+  
+
 
 #* Echo back the input
 #* @param msg The message to echo
