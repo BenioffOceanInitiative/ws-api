@@ -1,9 +1,19 @@
 # run API by sourcing this R script in RStudio
 library(plumber)
-r <- plumb("/srv/ws-api/plumber.R")
+
+plumber_r <- "/srv/ws-api/plumber.R"
+
+plumber$new(plumber_r)$run(port=8888, host="0.0.0.0", swagger = T)
+
+# Reference
+#  - custom serializer: https://github.com/rstudio/plumber/issues/344#issuecomment-439492586
+
+#r <- plumb("/srv/ws-api/plumber.R")
 #r$run(port=8888)
-r$run(port=8888, host="0.0.0.0", swagger = T)
+#r$run(port=8888, host="0.0.0.0", swagger = T)
+
 # open in web browser: http://localhost:8888/__swagger__/
+# open in web browser: http://api.ships4whales.org
 # for more, see https://www.rplumber.io/docs
 
 # To start on rstudio.ships4whales.org:
