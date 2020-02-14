@@ -111,28 +111,20 @@ function(){
 #* return GeoJSON of ship segments
 #* @param mmsi AIS ship ID, eg 248896000
 #* @param date_beg begin date, preferably in format YYYY-mm-dd, eg 2019-10-01
-#* @param date_end end date, preferably in format YYYY-mm-dd, eg 2019-11-01
+#* @param date_end end date, preferably in format YYYY-mm-dd, eg 2019-10-07
 #* @param bbox bounding box in decimal degrees: lon_min,lat_min,lon_max,lat_max
 #* @serializer contentType list(type="application/json")
 #* @get /ship_segments
 function(mmsi = NULL, date_beg = NULL, date_end = NULL, bbox = NULL){
   
-  # mmsi = "248896000"; date_beg=NULL; date_end=NULL; bbox = NULL
-  sql <- "SELECT * FROM vsr_segments"
-  #segs <- tbl(con, "vsr_segments")
+  cols <- "
+    name, mmsi, 
+    speed, seg_mins, seg_km, seg_kmhr, seg_knots, speed_diff, 
+    year, beg_dt, end_dt, 
+    beg_lon, beg_lat, end_lon, end_lat, 
+    geometry" # gid, geometry, date
   
-  # segs %>% 
-  #   summarize(
-  #     min_dt = min(beg_dt),
-  #     max_dt = max(end_dt)) %>% 
-  #   collect()
-  # min_dt: 2018-01-01
-  # max_dt: 2019-11-09
-
-  # vsrs <- st_read(dsn = con, layer = "vsr_zones")
-  # st_bbox(vsrs)
-  #       xmin       ymin       xmax       ymax 
-  # -121.02994   33.29988 -117.48026   34.57384
+  sql <- glue("SELECT {cols} FROM vsr_segments")
   
   where <- c()
   
@@ -140,32 +132,33 @@ function(mmsi = NULL, date_beg = NULL, date_end = NULL, bbox = NULL){
     where <- c(where, glue("mmsi = {mmsi}"))
   
   if (!is.null(date_beg))
-    where <- c(where, glue("beg_dt >= {date_beg}")) # TODO?: date_trunc('day', beg_dt)
+    where <- c(where, glue("beg_dt >= to_date('{date_beg}','YYYY-MM-DD')")) # TODO?: date_trunc('day', beg_dt)
   
   if (!is.null(date_end))
-    where <- c(where, glue("end_dt <= {date_end}"))
+    where <- c(where, glue("end_dt <= to_date('{date_end}','YYYY-MM-DD')"))
 
-  # c bounding box in decimal degrees: lon_min,lat_min,lon_max,lat_max
+  # bbox bounding box in decimal degrees: lon_min,lat_min,lon_max,lat_max
   if (!is.null(bbox)){
 
-    #bbox <- "-120,33,-119,34"
     b <- strsplit(bbox, ",")[[1]] %>% as.numeric()
-    x1 <- b[1]; y1 <- b[2]; x2 <- b[3]; y2 <- b[4]; 
+    x1 <- b[1]; y1 <- b[2]; x2 <- b[3]; y2 <- b[4]
     sql_bbox <- glue("ST_Intersects(geometry, 'SRID=4326;POLYGON(({x2} {y1}, {x2} {y2}, {x1} {y2}, {x1} {y1}, {x2} {y1}))')")
   
     where <- c(where, sql_bbox)
   }
   
   if (length(where) > 0){
-    sql_where <- paste(where, collapse = " AND ")
+    sql_where <- paste(where, collapse = " AND \n")
     sql <- glue("{sql} WHERE {sql_where}")
   }
   
-  message(glue("sql:{sql}"))
+  message(glue(
+    "/ship_segments
+       sql:{sql}"))
   
   segs <- st_read(dsn = con, query = sql)
   
-  sf_geojson(segs) 
+  sf_geojson(segs)
 }
 
 #* redirect to the swagger interface 
