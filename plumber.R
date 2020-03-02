@@ -120,9 +120,9 @@ function(mmsi = NULL, date_beg = NULL, date_end = NULL, bbox = NULL){
   cols <- "
     name, mmsi, 
     speed, seg_mins, seg_km, seg_kmhr, seg_knots, speed_diff, 
-    year, beg_dt, end_dt, 
+    beg_dt, end_dt, 
     beg_lon, beg_lat, end_lon, end_lat, 
-    geometry" # gid, geometry, date
+    geometry" # year, gid, geometry, date
   
   sql <- glue("SELECT {cols} FROM vsr_segments")
   
