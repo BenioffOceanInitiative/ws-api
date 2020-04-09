@@ -7,6 +7,24 @@ library(sf)
 library(geojsonsf)
 library(jsonlite)
 
+library(bigrquery)
+
+
+service_account_json <- "/home/admin/Benioff Ocean Initiative-454f666d1896.json"
+
+bq_auth(path = service_account_json)
+
+con <- dbConnect(
+  bigquery(),
+  project = "benioff-ocean-initiative",
+  dataset = "whalesafe_ais",
+  billing = "benioff-ocean-initiative")
+
+con 
+
+dbListTables(con)
+
+
 dir_api <- "/srv/ws-api"
 db_yml  <- file.path(dir_api, ".amazon_rds.yml")
 
@@ -116,15 +134,62 @@ function(){
 #* @serializer contentType list(type="application/json")
 #* @get /ship_segments
 function(mmsi = NULL, date_beg = NULL, date_end = NULL, bbox = NULL){
+  # mmsi = 477136800
   
+  # cols <- "
+  #   name, mmsi, 
+  #   speed, seg_mins, seg_km, seg_kmhr, seg_knots, speed_diff, 
+  #   beg_dt, end_dt, 
+  #   beg_lon, beg_lat, end_lon, end_lat, 
+  #   geometry" # year, gid, geometry, date
   cols <- "
-    name, mmsi, 
-    speed, seg_mins, seg_km, seg_kmhr, seg_knots, speed_diff, 
-    beg_dt, end_dt, 
-    beg_lon, beg_lat, end_lon, end_lat, 
-    geometry" # year, gid, geometry, date
+    name_of_ship, mmsi, callsign, shiptype, imo_lr_ihs_no, length,
+    operator, operator_code
+    timestamp, lon, lat,
+    distance, date_diff_minutes, speed_knots, implied_speed_knots, 
+    source,
+    linestring" # length_km? beg_dt, end_dt, beg_lon, beg_lat, end_lon, end_lat?
   
-  sql <- glue("SELECT {cols} FROM vsr_segments")
+  sql <- glue("SELECT {cols} FROM gfw_ihs_segments LIMIT 10")
+  
+  segs <- st_read(dsn = con, query = sql)
+  
+  
+  # geojson example
+  nc = st_read(system.file("shape/nc.shp", package="sf"))
+  write_sf(nc, "nc.geojson")
+  
+  summary(nc) # note that AREA was computed using Euclidian area on lon/lat degrees
+  
+  segs <- dbGetQuery(
+    con, 
+    "SELECT mmsi, timestamp, lon, lat, ST_AsGeoJSON(linestring) as ln_geojson FROM gfw_ihs_segments LIMIT 3")
+  
+  jsonlite::toJSON(segs)
+  
+  cat(toJSON(segs, auto_unbox = TRUE))
+  writeLines(toJSON(segs, auto_unbox = TRUE), "segs.geojson")
+  
+  segs <- as.list(segs)
+  segs$geometry = unbox(segs$ln_geojson)
+  segs %>% 
+    select(-ln_geojson) %>% 
+    toJSON() %>% 
+    writeLines("segs.geojson")
+  
+  library(jsonlite)
+  s <- '{"type":"Topology","objects":{"map": "0"}}'
+  j <- fromJSON(s)
+  j$type <- unbox(j$type)
+  j$objects$map <- unbox(j$objects$map)
+  toJSON(j)
+  
+  read_sf("segs.geojson") %>% plot()
+  
+  library(geojsonR)
+  
+  
+  # TODO: capture "Billed: 2.52 GB"
   
   where <- c()
   
