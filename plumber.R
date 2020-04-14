@@ -128,7 +128,7 @@ function(){
 #* @param bbox bounding box in decimal degrees: lon_min,lat_min,lon_max,lat_max
 #* @serializer contentType list(type="application/json")
 #* @get /ship_segments
-function(mmsi = NULL, date_beg = NULL, date_end = NULL, bbox = NULL){
+function(bbox = NULL, date_end = NULL, date_beg = NULL, mmsi = NULL){
   # mmsi = 477136800
   
   # cols <- "
@@ -145,7 +145,8 @@ function(mmsi = NULL, date_beg = NULL, date_end = NULL, bbox = NULL){
     source,
     ST_AsGeoJSON(linestring) as geom_txt" # length_km? beg_dt, end_dt, beg_lon, beg_lat, end_lon, end_lat?
   
-  sql <- glue("SELECT {flds} FROM gfw_ihs_segments")
+  #sql <- glue("SELECT {flds} FROM gfw_ihs_segments")
+  sql <- glue("SELECT {flds} FROM scratch.gfw_ihs_segments_geo_cluster_1") # clusters rock!
   
   where <- c()
   
@@ -173,28 +174,32 @@ function(mmsi = NULL, date_beg = NULL, date_end = NULL, bbox = NULL){
     sql <- glue("{sql} WHERE {sql_where}")
   }
   
+
+  # TEST: uncomment below for quick run of example ----
+  #
+  # sql <- "SELECT
+  #   name_of_ship, mmsi, callsign, shiptype, imo_lr_ihs_no, length,
+  #   operator, operator_code,
+  #   timestamp, lon, lat,
+  #   distance, date_diff_minutes, speed_knots, implied_speed_knots,
+  #   source,
+  #   ST_AsGeoJSON(linestring) as geom_txt 
+  # -- FROM whalesafe_ais.gfw_ihs_segments 
+  # FROM scratch.gfw_ihs_segments_geo_cluster_1
+  # WHERE DATE(timestamp) >= DATE '2017-01-01' AND DATE(timestamp) <= DATE '2017-01-07'"
+  
   message(glue(
-    "/ship_segments
-       sql:{sql}"))
-  
-  
-  sql <- "
-  SELECT
-    name_of_ship, mmsi, callsign, shiptype, imo_lr_ihs_no, length,
-    operator, operator_code,
-    timestamp, lon, lat,
-    distance, date_diff_minutes, speed_knots, implied_speed_knots,
-    source,
-    ST_AsGeoJSON(linestring) as geom_txt 
-  FROM whalesafe_ais.gfw_ihs_segments 
-  WHERE DATE(timestamp) >= DATE '2017-01-01' AND DATE(timestamp) <= DATE '2017-01-07'
-  "
+    "{Sys.time()}: dbGetQuery() begin
+          sql:{sql}
+    
+    "))
   
   segs <- dbGetQuery(con, sql)
-  # Running job 'benioff-ocean-initiative.job_dqBpi45ud_fhFGEXd_kLM8sCdItl.US' [|]  9s
-  # Complete
-  # Billed: 6.6 GB
-  # Downloading 57,654 rows in 6 pages.  
+
+  
+  message(glue(
+    "{Sys.time()}: segs$geom = ..."))
+  
   
   if (nrow(segs) == 0) return(list())
   
@@ -204,7 +209,13 @@ function(mmsi = NULL, date_beg = NULL, date_end = NULL, bbox = NULL){
     st_set_geometry("geom") %>% 
     select(-geom_txt)
   
+  message(glue(
+    "{Sys.time()}: sf_geojson()"))
+  
   sf_geojson(segs)
+  
+  message(glue(
+    "{Sys.time()}: done"))
 }
 
 #* redirect to the swagger interface 
