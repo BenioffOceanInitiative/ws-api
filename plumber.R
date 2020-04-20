@@ -137,16 +137,26 @@ function(bbox = NULL, date_end = NULL, date_beg = NULL, mmsi = NULL){
   #   beg_dt, end_dt, 
   #   beg_lon, beg_lat, end_lon, end_lat, 
   #   geometry" # year, gid, geometry, date
-  flds <- "
-    name_of_ship, mmsi, callsign, shiptype, imo_lr_ihs_no, length,
-    operator, operator_code,
-    timestamp, lon, lat,
-    distance, date_diff_minutes, speed_knots, implied_speed_knots, 
-    source,
-    ST_AsGeoJSON(linestring) as geom_txt" # length_km? beg_dt, end_dt, beg_lon, beg_lat, end_lon, end_lat?
+  # flds <- "
+  #   name_of_ship, mmsi, callsign, shiptype, imo_lr_ihs_no, length,
+  #   operator, operator_code,
+  #   timestamp, lon, lat,
+  #   distance, date_diff_minutes, speed_knots, implied_speed_knots, 
+  #   source,
+  #   ST_AsGeoJSON(linestring) as geom_txt" # length_km? beg_dt, end_dt, beg_lon, beg_lat, end_lon, end_lat?
   
+  flds <- "
+    mmsi, operator, day, 
+    ST_AsGeoJSON(geom_line) AS geom_txt"
+  # timestamp_daymin, timestamp_daymax, 
+  # speed_knots_daymin, speed_knots_daymax, speed_knots_dayavg, 
+  # implied_speed_knots_daymin, implied_speed_knots_dayavg, 
+  # distance_km_daymin, distance_km_daymax, distance_km_dayavg, 
+  # minutes_daymin, minutes_daymax, minutes_dayavg, 
+  # source_daycount_orbcomm, source_daycount_spire
+    
   #sql <- glue("SELECT {flds} FROM gfw_ihs_segments")
-  sql <- glue("SELECT {flds} FROM scratch.gfw_ihs_segments_geo_cluster_1") # clusters rock!
+  sql <- glue("SELECT {flds} FROM clustered_datasets.gfw_ihs_segments_daily") # clusters rock!
   
   where <- c()
   
@@ -154,17 +164,17 @@ function(bbox = NULL, date_end = NULL, date_beg = NULL, mmsi = NULL){
     where <- c(where, glue("mmsi = {mmsi}"))
   
   if (!is.null(date_beg))
-    where <- c(where, glue("DATE(timestamp) >= DATE '{date_beg}'"))
+    where <- c(where, glue("day >= '{date_beg}'"))
   
   if (!is.null(date_end))
-    where <- c(where, glue("DATE(timestamp) <= DATE '{date_end}'"))
+    where <- c(where, glue("day <= '{date_end}'"))
 
   # bbox bounding box in decimal degrees: lon_min,lat_min,lon_max,lat_max
   if (!is.null(bbox)){
 
     b <- strsplit(bbox, ",")[[1]] %>% as.numeric()
     x1 <- b[1]; y1 <- b[2]; x2 <- b[3]; y2 <- b[4]
-    sql_bbox <- glue("ST_Intersects(linestring, 'SRID=4326;POLYGON(({x2} {y1}, {x2} {y2}, {x1} {y2}, {x1} {y1}, {x2} {y1}))')")
+    sql_bbox <- glue("ST_Intersects(geom_line, 'SRID=4326;POLYGON(({x2} {y1}, {x2} {y2}, {x1} {y2}, {x1} {y1}, {x2} {y1}))')")
   
     where <- c(where, sql_bbox)
   }
@@ -174,7 +184,6 @@ function(bbox = NULL, date_end = NULL, date_beg = NULL, mmsi = NULL){
     sql <- glue("{sql} WHERE {sql_where}")
   }
   
-
   # TEST: uncomment below for quick run of example ----
   #
   # sql <- "SELECT
@@ -188,18 +197,38 @@ function(bbox = NULL, date_end = NULL, date_beg = NULL, mmsi = NULL){
   # FROM scratch.gfw_ihs_segments_geo_cluster_1
   # WHERE DATE(timestamp) >= DATE '2017-01-01' AND DATE(timestamp) <= DATE '2017-01-07'"
   
+  # sql <- "
+  #   SELECT
+  #     mmsi, operator, day, 
+  #     ST_AsGeoJSON(geom_line) AS geom_txt
+  #   FROM 
+  #     clustered_datasets.gfw_ihs_segments_daily
+  #   WHERE 
+  #     day >= '2017-01-01' AND day <= '2017-01-07'
+  #     -- nrows: 342; 25 empty geom_txt?
+  #     -- NOT ST_ISEMPTY(geom_line)
+  #     -- LENGTH(ST_AsGeoJSON(geom_line)) > 0"
+  
   message(glue(
     "{Sys.time()}: dbGetQuery() begin
           sql:{sql}
     
     "))
   
-  segs <- dbGetQuery(con, sql)
-
+  segs <- dbGetQuery(con, sql) # 2s
   
   message(glue(
     "{Sys.time()}: segs$geom = ..."))
   
+  segs <- segs %>% 
+    mutate(
+      geom_nchar = nchar(geom_txt))
+  
+  message(glue(
+    "filtering rows with empty geometries: {sum(segs$geom_nchar == 0)}"))
+  
+  segs <- segs %>% 
+    filter(nchar(geom_txt) != 0)
   
   if (nrow(segs) == 0) return(list())
   
