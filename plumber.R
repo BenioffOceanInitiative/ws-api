@@ -199,11 +199,11 @@ function(bbox = NULL, date_end = NULL, date_beg = NULL, mmsi = NULL){
   
   # sql <- "
   #   SELECT
-  #     mmsi, operator, day, 
+  #     mmsi, operator, day,
   #     ST_AsGeoJSON(geom_line) AS geom_txt
-  #   FROM 
+  #   FROM
   #     clustered_datasets.gfw_ihs_segments_daily
-  #   WHERE 
+  #   WHERE
   #     day >= '2017-01-01' AND day <= '2017-01-07'
   #     -- nrows: 342; 25 empty geom_txt?
   #     -- NOT ST_ISEMPTY(geom_line)
@@ -241,10 +241,10 @@ function(bbox = NULL, date_end = NULL, date_beg = NULL, mmsi = NULL){
   message(glue(
     "{Sys.time()}: sf_geojson()"))
   
-  sf_geojson(segs)
+  # message(glue(
+  #   "{Sys.time()}: done"))
   
-  message(glue(
-    "{Sys.time()}: done"))
+  sf_geojson(segs)
 }
 
 #* redirect to the swagger interface 
