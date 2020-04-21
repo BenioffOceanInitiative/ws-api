@@ -101,11 +101,53 @@ function(){
 function(){
   
   sql <- glue(
-  "SELECT
-    operator, year, COUNT(*) AS year_ship_count
+  "SELECT 
+operator,
+year,
+year_coop_score,
+year_ship_count,
+CASE 
+  WHEN ((total_distance_km_under_10/total_distance_km) * 100) >= 99
+  THEN 'A+'
+  WHEN ((total_distance_km_under_10/total_distance_km) * 100) < 99 
+  AND ((total_distance_km_under_10/total_distance_km) * 100) >= 90
+  THEN 'A'
+  WHEN ((total_distance_km_under_10/total_distance_km) * 100) < 90 
+  AND ((total_distance_km_under_10/total_distance_km) * 100) >= 80
+  THEN 'B'
+  WHEN ((total_distance_km_under_10/total_distance_km) * 100) < 80 
+  AND ((total_distance_km_under_10/total_distance_km) * 100) >= 70
+  THEN 'C'
+  WHEN ((total_distance_km_under_10/total_distance_km) * 100) < 70 
+  AND ((total_distance_km_under_10/total_distance_km) * 100) >= 60
+  THEN 'D'
+  ELSE 'F'
+  END AS grade,
+  total_distance_km,
+total_distance_km_under_10,
+total_distance_km_btwn_10_12,
+total_distance_km_btwn_12_15,
+total_distance_km_over_15,
+  avg_speed_knots,
+  mmsi_list
+FROM(
+SELECT
+    operator, 
+    year, 
+    ROUND(AVG(coop_score),2) AS year_coop_score, 
+    COUNT(distinct(mmsi)) AS year_ship_count,
+    SUM( total_distance_km ) AS total_distance_km,
+    SUM( total_distance_km_under_10 ) AS total_distance_km_under_10 ,
+    SUM( total_distance_km_btwn_10_12 ) AS total_distance_km_btwn_10_12 ,
+    SUM( total_distance_km_btwn_12_15 ) AS total_distance_km_btwn_12_15 ,
+    SUM( total_distance_km_over_15 ) AS total_distance_km_over_15 ,
+    SUM( avg_speed_knots ) AS avg_speed_knots,
+    STRING_AGG(CAST(mmsi AS STRING), ', ') AS mmsi_list,
+    #STRING_AGG(DISTINCT(shiptype), ', ') AS ship_types
   FROM 
     `benioff-ocean-initiative.whalesafe_ais.mmsi_cooperation_stats`
-  GROUP BY operator, year")
+  GROUP BY operator, year
+  ORDER BY year_coop_score DESC);")
   
   message(glue(
     "{Sys.time()}: dbGetQuery() begin
@@ -113,7 +155,7 @@ function(){
     
     "))
   
-  segs <- dbGetQuery(con, sql)
+  operator_stats <- dbGetQuery(con, sql)
 }
 
 #* return mmsi stats table as JSON
