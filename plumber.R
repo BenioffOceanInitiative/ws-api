@@ -96,6 +96,26 @@ function(){
   readBin(csv_file, "raw", n=file.info(csv_file)$size)
 }
 
+#* return list of operators as JSON
+#* @get /operators
+function(){
+  
+  sql <- glue(
+  "SELECT
+    operator, year, COUNT(*) AS year_ship_count
+  FROM 
+    `benioff-ocean-initiative.whalesafe_ais.mmsi_cooperation_stats`
+  GROUP BY operator, year")
+  
+  message(glue(
+    "{Sys.time()}: dbGetQuery() begin
+          sql:{sql}
+    
+    "))
+  
+  segs <- dbGetQuery(con, sql)
+}
+
 # TODO: @get /ships_by_operator
 
 #* return table of ships as CSV
