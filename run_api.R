@@ -5,7 +5,7 @@ plumber_r <- "/srv/ws-api/plumber.R"
 
 plumber$new(plumber_r)$run(port=8888, host="0.0.0.0", swagger = T)
 
-# Reference
+## Reference
 #  - custom serializer: https://github.com/rstudio/plumber/issues/344#issuecomment-439492586
 
 #r <- plumb("/srv/ws-api/plumber.R")
