@@ -116,6 +116,24 @@ function(){
   segs <- dbGetQuery(con, sql)
 }
 
+#* return mmsi stats table as JSON
+#* @get /mmsi_cooperation_stats
+function(){
+  
+  sql <- glue(
+    "SELECT * 
+    FROM 
+    `benioff-ocean-initiative.whalesafe_ais.mmsi_cooperation_stats`;")
+  
+  message(glue(
+    "{Sys.time()}: dbGetQuery() begin
+          sql:{sql}
+    
+    "))
+  
+  stats <- dbGetQuery(con, sql)
+}
+
 # TODO: @get /ships_by_operator
 
 #* return table of ships as CSV
