@@ -3,3 +3,4 @@
 .RData
 .Ruserdata
 .amazon_rds.yml
+__pycache__
