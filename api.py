@@ -25,15 +25,32 @@ def home():
 # http://127.0.0.1:5000/api/v1/geo
 @app.route('/api/v1/geo', methods=['GET'])
 def api_geo():
-    query_job = client.query("""SELECT mmsi, timestamp, implied_speed_knots,
-                             ST_ASGEOJSON(linestring) AS geom
-                             FROM `benioff-ocean-initiative.clustered_datasets.gfw_ihs_segments` 
-                             WHERE DATE(timestamp) >= DATE_SUB(CURRENT_DATE(), INTERVAL 7 DAY);""")  
-    records = [dict(row) for row in query_job]
-    json_obj = json.dumps(str(records))
-    result = json_obj.replace("\\", "") 
-    return (result)
-
+    
+    sql = ("""SELECT 
+           CAST(mmsi AS STRING) AS mmsi, 
+           CAST(timestamp AS STRING) AS timestamp, 
+           linestring
+           FROM `benioff-ocean-initiative.clustered_datasets.gfw_ihs_segments` 
+           WHERE DATE(timestamp) >= DATE_SUB(CURRENT_DATE(), INTERVAL 5 DAY);""") 
+    df = client.query(sql).to_dataframe()
+    
+    def df_to_geojson(df, properties, line = "linestring"):
+        geojson = {'type':'FeatureCollection', 'features':[]}
+        for _, row in df.iterrows():
+            feature = {'type':'Feature',
+                       'properties':{},
+                       'geometry':{'type':'Linestring',
+                                   'coordinates':[]}}
+            feature['geometry']['coordinates'] = [row[line]]
+            for prop in properties:
+                feature['properties'][prop] = row[prop]
+            geojson['features'].append(feature)
+        return geojson
+    
+    cols = ['mmsi', 'timestamp']
+    geojson = df_to_geojson(df, cols)
+    return(geojson)
+    
 @app.route('/api/v1/stats', methods=['GET'])
 def api_stats():
     query = """SELECT * FROM `benioff-ocean-initiative.whalesafe_ais.mmsi_cooperation_stats`;"""
