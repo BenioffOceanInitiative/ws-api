@@ -45,11 +45,19 @@ def api_stats():
     return(result)         
 
 # This iis a super lazy function, but it spits out a json
+    # http://127.0.0.1:5000/api/v1/stats/mmsi
 @app.route('/api/v1/stats/mmsi', methods=['GET'])
 def api_ship_stats():
     sql = """SELECT * FROM `benioff-ocean-initiative.whalesafe_ais.mmsi_cooperation_stats`;"""
     df = client.query(sql).to_dataframe()
     return(df.to_json( orient='records', lines=True))     
          
+# This iis a super lazy function, but it spits out a json
+    # http://127.0.0.1:5000/api/v1/stats/operator
+@app.route('/api/v1/stats/operator', methods=['GET'])
+def api_operator_stats():
+    sql = """SELECT * FROM `benioff-ocean-initiative.whalesafe_ais.operator_stats`;"""
+    df = client.query(sql).to_dataframe()
+    return(df.to_json( orient='records', lines=True))  
 
 app.run()
