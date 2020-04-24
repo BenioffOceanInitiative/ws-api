@@ -22,6 +22,21 @@ def home():
     return '''<h1>WhaleSafe API</h1>
 <p>A prototype API for AIS Message json and geojson.</p>'''
 
+# http://127.0.0.1:5000/api/v1/geo_1
+@app.route('/api/v1/geo_1', methods=['GET'])
+def api_geo_1():
+    
+    sql = ("""SELECT 
+           ST_ASGEOJSON(linestring) as linestring
+           FROM `benioff-ocean-initiative.clustered_datasets.gfw_ihs_segments` 
+           WHERE DATE(timestamp) >= DATE_SUB(CURRENT_DATE(), INTERVAL 7 DAY);""") 
+    query_job = client.query(sql)
+    records = [dict(row) for row in query_job]
+    json_obj = json.dumps(str(records))
+    result = json_obj.replace("\\", "") 
+
+    return(result)  
+    
 # http://127.0.0.1:5000/api/v1/geo
 @app.route('/api/v1/geo', methods=['GET'])
 def api_geo():
@@ -29,10 +44,11 @@ def api_geo():
     sql = ("""SELECT 
            CAST(mmsi AS STRING) AS mmsi, 
            CAST(timestamp AS STRING) AS timestamp, 
-           linestring
+           ST_ASGEOJSON(linestring) as linestring
            FROM `benioff-ocean-initiative.clustered_datasets.gfw_ihs_segments` 
-           WHERE DATE(timestamp) >= DATE_SUB(CURRENT_DATE(), INTERVAL 5 DAY);""") 
+           WHERE DATE(timestamp) >= DATE_SUB(CURRENT_DATE(), INTERVAL 7 DAY);""") 
     df = client.query(sql).to_dataframe()
+    df['linestring'] = df['linestring'].replace(["\\"], "")
     
     def df_to_geojson(df, properties, line = "linestring"):
         geojson = {'type':'FeatureCollection', 'features':[]}
