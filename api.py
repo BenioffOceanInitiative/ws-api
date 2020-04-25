@@ -80,8 +80,8 @@ def api_geo_2():
         CAST(speed_knots AS FLOAT64) AS speed_knots, 
         CAST(implied_speed_knots AS FLOAT64) AS implied_speed_knots,
         CAST(calculated_knots AS FLOAT64) AS calculated_knots,
-        FROM `benioff-ocean-initiative.scratch.gfw_ihs_segments_test` 
-        WHERE DATE(timestamp) >= DATE_SUB(CURRENT_DATE(), INTERVAL 7 DAY);"""
+        FROM `benioff-ocean-initiative.scratch.gfw_ihs_segments` 
+        WHERE timestamp BETWEEN '2020-04-14' AND '2020-04-15';"""
 
     # Make into pandas dataframe
     df = client.query(sql).to_dataframe()
