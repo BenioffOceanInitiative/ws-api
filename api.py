@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, Response
 import pandas as pd
 import json
 import geojson
@@ -41,7 +41,7 @@ def api_geo():
     json_obj = json.dumps(str(records))
     result = json_obj.replace("\\", "") 
 
-    return(result)  
+    return Response(result, mimetype='application/json')  
     
 # http://127.0.0.1:5000/api/v1/geo_1
 @app.route('/api/v1/geo_1', methods=['GET'])
@@ -73,7 +73,7 @@ def api_geo_1():
     
     cols = ['mmsi', 'timestamp']
     geojson = df_to_geojson(df, cols)
-    return(geojson)
+    return Response(geojson, mimetype='application/json')
 
 # http://127.0.0.1:5000/api/v1/geo_2
 @app.route('/api/v1/geo_2', methods=['GET'])
@@ -114,7 +114,7 @@ def api_geo_2():
     #data = pd.DataFrame(df, columns=col)
 
     results = data2geojson(df)
-    return(results)
+    return Response(results, mimetype='application/json')
     
 @app.route('/api/v1/stats', methods=['GET'])
 @cross_origin()
@@ -125,7 +125,7 @@ def api_stats():
     json_obj = json.dumps(str(records))
     result = json_obj.replace("\\", "") 
 
-    return(result)         
+    return Response(result, mimetype='application/json')         
 
 # This iis a super lazy function, but it spits out a json
     # http://127.0.0.1:5000/api/v1/stats/mmsi
@@ -134,7 +134,8 @@ def api_stats():
 def api_ship_stats():
     sql = """SELECT * FROM `benioff-ocean-initiative.whalesafe_ais.mmsi_cooperation_stats`;"""
     df = client.query(sql).to_dataframe()
-    return(df.to_json( orient='records', lines=True))     
+    json_obj = df.to_json( orient='records', lines=True)
+    return Response(json_obj, mimetype='application/json')     
          
 # This iis a super lazy function, but it spits out a json
     # http://127.0.0.1:5000/api/v1/stats/operator
@@ -143,6 +144,7 @@ def api_ship_stats():
 def api_operator_stats():
     sql = """SELECT * FROM `benioff-ocean-initiative.whalesafe_ais.operator_stats`;"""
     df = client.query(sql).to_dataframe()
-    return(df.to_json( orient='records', lines=True))  
+    json_obj = df.to_json( orient='records', lines=True)
+    return Response(json_obj, mimetype='application/json')  
 
-app.run()
+#app.run()
