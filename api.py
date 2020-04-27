@@ -10,7 +10,8 @@ app = flask.Flask(__name__)
 app.config["DEBUG"] = True
 
 #FILL IN YOUR PATH TO THE 'Benioff Ocean Initiative-454f666d1896.json'
-credentials_json = '/Users/seangoral/bq_api_test/venv/Benioff Ocean Initiative-454f666d1896.json'
+#credentials_json = '/Users/seangoral/bq_api_test/venv/Benioff Ocean Initiative-454f666d1896.json'
+credentials_json = '/home/admin/Benioff Ocean Initiative-454f666d1896.json'
 
 credentials = service_account.Credentials.from_service_account_file(credentials_json)
 

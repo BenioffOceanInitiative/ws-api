@@ -23,6 +23,9 @@ getting empty rows!? see [whalesafe:simplify_segments.Rmd](https://github.com/Be
 
 Via [rstudio.ships4whales.org](http://rstudio.ships4whales.org) Terminal:
 
+* [Quick start — Flask-RESTX 0.2.1.dev documentation](https://flask-restx.readthedocs.io/en/latest/quickstart.html)
+* [Full example — Flask-RESTX 0.2.1.dev documentation](https://flask-restx.readthedocs.io/en/latest/example.html)
+
 ```bash
 # install py3 env
 sudo apt-get update
@@ -34,6 +37,7 @@ cd ~/py3env
 python3 -m venv venv
 
 # activate the environment
+cd ~/py3env
 . venv/bin/activate
 
 # install flask
@@ -55,6 +59,20 @@ def hello_world():
     return 'Hello, World!'
 ```
 
+Redo install packages for whalesafe `api.py`:
+
+```bash
+pip install Flask
+pip install flask-restx
+#pip install flask-restplus
+pip install werkzeug
+pip install pandas
+pip install geojson
+pip install google-cloud-bigquery
+pip install google-oauth
+```
+
+
 Run:
 
 ```bash
@@ -63,7 +81,11 @@ cd ~/py3env
 . venv/bin/activate
 
 # set env vars
-export FLASK_APP=/home/admin/plumber-api/hello.py
+#export FLASK_APP=/home/admin/plumber-api/hello.py
+export FLASK_APP=/home/admin/plumber-api/flask-restplus-examples/complex.py
+export FLASK_APP=/home/admin/plumber-api/flask-restplus-examples/todo_simple.py
+export FLASK_APP=/home/admin/plumber-api/api.py
+flask run --host=0.0.0.0 --port=8888 &
 
 # run locally
 flask run
