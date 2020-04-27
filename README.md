@@ -76,36 +76,20 @@ pip install google-oauth
 Run:
 
 ```bash
-# activate the environment (if not already)
-cd ~/py3env
-. venv/bin/activate
-
-# set env vars
-#export FLASK_APP=/home/admin/plumber-api/hello.py
-export FLASK_APP=/home/admin/plumber-api/flask-restplus-examples/complex.py
-export FLASK_APP=/home/admin/plumber-api/flask-restplus-examples/todo_simple.py
-export FLASK_APP=/home/admin/plumber-api/api.py
-flask run --host=0.0.0.0 --port=8888 &
-
-# run locally
-flask run
-
-# kill r plumber
-ps -eaf | grep ws-api # get process id (pid), eg 99999
-sudo kill -9 99999
-
-# run so externally visible
-flask run --host=0.0.0.0 --port=8888 &
-
-# kill flask
+# kill python flask api, if already running
 ps -eaf | grep flask # get process id (pid), eg 99999
 sudo kill -9 99999
 
-# start r plumber
-sudo Rscript /srv/ws-api/run_api.R &
+# activate the python environment
+cd ~/py3env
+. venv/bin/activate
+
+# run so externally visible
+export FLASK_APP=/home/admin/plumber-api/api.py
+flask run --host=0.0.0.0 --port=8888 &
 
 # leave python virtual environment
-deactivate
+#deactivate
 ```
 
 Next Steps: 
