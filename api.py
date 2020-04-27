@@ -1,17 +1,18 @@
-import flask
-#from flask import request, jsonify
+from flask import Flask
 import pandas as pd
 import json
 import geojson
 from google.cloud import bigquery
 from google.oauth2 import service_account
+from flask_cors import CORS, cross_origin
 
-app = flask.Flask(__name__)
-app.config["DEBUG"] = True
+app = Flask(__name__)
+cors = CORS(app)
+app.config['CORS_HEADERS'] = 'Content-Type'
 
 #FILL IN YOUR PATH TO THE 'Benioff Ocean Initiative-454f666d1896.json'
-#credentials_json = '/Users/seangoral/bq_api_test/venv/Benioff Ocean Initiative-454f666d1896.json'
-credentials_json = '/home/admin/Benioff Ocean Initiative-454f666d1896.json'
+credentials_json = '/Users/seangoral/bq_api_test/venv/Benioff Ocean Initiative-454f666d1896.json'
+#credentials_json = '/home/admin/Benioff Ocean Initiative-454f666d1896.json'
 
 credentials = service_account.Credentials.from_service_account_file(credentials_json)
 
@@ -20,12 +21,15 @@ client = bigquery.Client(credentials= credentials,project=project_id)
 
 # http://127.0.0.1:5000/api
 @app.route('/api', methods=['GET'])
+@cross_origin()
 def home():
     return '''<h1>WhaleSafe API</h1>
 <p>A prototype API for AIS Message json and geojson.</p>'''
 
+
 # http://127.0.0.1:5000/api/v1/geo_1
 @app.route('/api/v1/geo', methods=['GET'])
+@cross_origin()
 def api_geo():
     
     sql = ("""SELECT 
@@ -41,6 +45,7 @@ def api_geo():
     
 # http://127.0.0.1:5000/api/v1/geo_1
 @app.route('/api/v1/geo_1', methods=['GET'])
+@cross_origin()
 def api_geo_1():
     
     sql = ("""SELECT 
@@ -72,6 +77,7 @@ def api_geo_1():
 
 # http://127.0.0.1:5000/api/v1/geo_2
 @app.route('/api/v1/geo_2', methods=['GET'])
+@cross_origin()
 def api_geo_2():
     # Query BigQuery table
     sql = """SELECT 
@@ -111,6 +117,7 @@ def api_geo_2():
     return(results)
     
 @app.route('/api/v1/stats', methods=['GET'])
+@cross_origin()
 def api_stats():
     query = """SELECT * FROM `benioff-ocean-initiative.whalesafe_ais.mmsi_cooperation_stats`;"""
     query_job = client.query(query)
@@ -123,6 +130,7 @@ def api_stats():
 # This iis a super lazy function, but it spits out a json
     # http://127.0.0.1:5000/api/v1/stats/mmsi
 @app.route('/api/v1/stats/mmsi', methods=['GET'])
+@cross_origin()
 def api_ship_stats():
     sql = """SELECT * FROM `benioff-ocean-initiative.whalesafe_ais.mmsi_cooperation_stats`;"""
     df = client.query(sql).to_dataframe()
@@ -131,6 +139,7 @@ def api_ship_stats():
 # This iis a super lazy function, but it spits out a json
     # http://127.0.0.1:5000/api/v1/stats/operator
 @app.route('/api/v1/stats/operator', methods=['GET'])
+@cross_origin()
 def api_operator_stats():
     sql = """SELECT * FROM `benioff-ocean-initiative.whalesafe_ais.operator_stats`;"""
     df = client.query(sql).to_dataframe()
