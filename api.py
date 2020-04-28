@@ -88,13 +88,12 @@ def api_geo_2():
     # Query BigQuery table
     sql = """SELECT 
         lon, lat, lead_lon, lead_lat, 
+        CAST(CAST(timestamp AS DATE) as string) as date,
         CAST(mmsi AS FLOAT64) AS mmsi,
         operator AS operator,
-        CAST(speed_knots AS FLOAT64) AS speed_knots, 
-        CAST(implied_speed_knots AS FLOAT64) AS implied_speed_knots,
         CAST(calculated_knots AS FLOAT64) AS calculated_knots,
-        FROM `benioff-ocean-initiative.scratch.gfw_ihs_segments` 
-        WHERE timestamp BETWEEN '2020-04-14' AND '2020-04-15';"""
+        FROM `benioff-ocean-initiative.clustered_datasets.gfw_ihs_segments` 
+        WHERE timestamp BETWEEN '2020-04-23' AND '2020-04-25';"""
 
     # Make into pandas dataframe
     df = client.query(sql).to_dataframe()
@@ -105,10 +104,9 @@ def api_geo_2():
         insert_features = lambda X: features.append(
                 geojson.Feature(geometry=geojson.LineString(([X["lead_lon"], X["lead_lat"]],
                                                              [X["lon"], X["lat"]])),
-                                properties=dict(mmsi=X["mmsi"],
+                                properties=dict(date=X["date"],
+                                                mmsi=X["mmsi"],
                                                 operator=X["operator"],
-                                                speed_knots=X["speed_knots"],
-                                                implied_speed_knots=X["implied_speed_knots"],
                                                 calculated_knots=X["calculated_knots"])))
         df.apply(insert_features, axis=1)
         #with open('/Users/seangoral/bq_api_test/map1.geojson', 'w', encoding='utf8') as fp:
