@@ -11,8 +11,8 @@ cors = CORS(app)
 app.config['CORS_HEADERS'] = 'Content-Type'
 
 #FILL IN YOUR PATH TO THE 'Benioff Ocean Initiative-454f666d1896.json'
-#credentials_json = '/Users/seangoral/bq_api_test/venv/Benioff Ocean Initiative-454f666d1896.json'
-credentials_json = '/home/admin/Benioff Ocean Initiative-454f666d1896.json'
+credentials_json = '/Users/seangoral/bq_api_test/venv/Benioff Ocean Initiative-454f666d1896.json'
+#credentials_json = '/home/admin/Benioff Ocean Initiative-454f666d1896.json'
 
 credentials = service_account.Credentials.from_service_account_file(credentials_json)
 
@@ -81,7 +81,7 @@ def api_geo_1():
     geojson = df_to_geojson(df, cols)
     return Response(geojson, mimetype='application/json')
 
-# http://127.0.0.1:5000/api/v1/geo_2
+# http://127.0.0.1:5000/api/v1/geo.json
 @app.route('/api/v1/geo_2', methods=['GET'])
 @cross_origin()
 def api_geo_2():
@@ -89,6 +89,7 @@ def api_geo_2():
     sql = """SELECT 
         lon, lat, lead_lon, lead_lat, 
         CAST(CAST(timestamp AS DATE) as string) as date,
+        UNIX_MICROS(timestamp) as unix_micros,
         CAST(mmsi AS FLOAT64) AS mmsi,
         operator AS operator,
         CAST(calculated_knots AS FLOAT64) AS calculated_knots,
@@ -102,8 +103,8 @@ def api_geo_2():
     def data2geojson(df):
         features = []
         insert_features = lambda X: features.append(
-                geojson.Feature(geometry=geojson.LineString(([X["lead_lon"], X["lead_lat"]],
-                                                             [X["lon"], X["lat"]])),
+                geojson.Feature(geometry=geojson.LineString(([X["lead_lon"], X["lead_lat"], X["unix_micros"]],
+                                                             [X["lon"], X["lat"], X["unix_micros"]])),
                                 properties=dict(date=X["date"],
                                                 mmsi=X["mmsi"],
                                                 operator=X["operator"],
@@ -132,7 +133,7 @@ def api_stats():
     return Response(result, mimetype='application/json')         
 
 # This iis a super lazy function, but it spits out a json
-    # http://127.0.0.1:5000/api/v1/stats/mmsi
+    # http://127.0.0.1:5000/api/v1/stats/mmsi.json
 @app.route('/api/v1/stats/mmsi', methods=['GET'])
 @cross_origin()
 def api_ship_stats():
@@ -142,7 +143,7 @@ def api_ship_stats():
     return Response(json_obj, mimetype='application/json')     
          
 # This iis a super lazy function, but it spits out a json
-    # http://127.0.0.1:5000/api/v1/stats/operator
+    # http://127.0.0.1:5000/api/v1/stats/operator.json
 @app.route('/api/v1/stats/operator', methods=['GET'])
 @cross_origin()
 def api_operator_stats():
@@ -151,4 +152,4 @@ def api_operator_stats():
     json_obj = df.to_json( orient='records', lines=True)
     return Response(json_obj, mimetype='application/json')  
 
-#app.run()
+app.run()
