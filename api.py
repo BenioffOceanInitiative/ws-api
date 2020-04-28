@@ -24,8 +24,14 @@ client = bigquery.Client(credentials= credentials,project=project_id)
 @cross_origin()
 def home():
     return '''<h1>WhaleSafe API</h1>
-<p>A prototype API for AIS Message json and geojson.</p>'''
-
+<p>A prototype API for AIS Message json and geojson.</p>
+<a href="http://api.ships4whales.org/api/v1/stats/mmsi"</a>
+<p> http://api.ships4whales.org/api/v1/stats/mmsi </p>
+<a href="http://api.ships4whales.org/api/v1/stats/operator"</a>
+<p> http://api.ships4whales.org/api/v1/stats/operator </p>
+<a href="http://api.ships4whales.org/api/v1/geo_2 "</a>
+<p> http://api.ships4whales.org/api/v1/geo_2 </p> 
+'''
 
 # http://127.0.0.1:5000/api/v1/geo_1
 @app.route('/api/v1/geo', methods=['GET'])
