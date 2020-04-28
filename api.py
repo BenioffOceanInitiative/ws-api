@@ -92,8 +92,8 @@ def api_geo_2():
         CAST(mmsi AS FLOAT64) AS mmsi,
         operator AS operator,
         CAST(calculated_knots AS FLOAT64) AS calculated_knots,
-        FROM `benioff-ocean-initiative.clustered_datasets.gfw_ihs_segments` 
-        WHERE timestamp BETWEEN '2020-04-23' AND '2020-04-25';"""
+        FROM `benioff-ocean-initiative.scratch.gfw_ihs_segments` 
+        WHERE timestamp BETWEEN '2020-04-16' AND '2020-04-17';"""
 
     # Make into pandas dataframe
     df = client.query(sql).to_dataframe()
