@@ -11,8 +11,8 @@ cors = CORS(app)
 app.config['CORS_HEADERS'] = 'Content-Type'
 
 #FILL IN YOUR PATH TO THE 'Benioff Ocean Initiative-454f666d1896.json'
-credentials_json = '/Users/seangoral/bq_api_test/venv/Benioff Ocean Initiative-454f666d1896.json'
-#credentials_json = '/home/admin/Benioff Ocean Initiative-454f666d1896.json'
+#credentials_json = '/Users/seangoral/bq_api_test/venv/Benioff Ocean Initiative-454f666d1896.json'
+credentials_json = '/home/admin/Benioff Ocean Initiative-454f666d1896.json'
 
 credentials = service_account.Credentials.from_service_account_file(credentials_json)
 
@@ -25,12 +25,12 @@ client = bigquery.Client(credentials= credentials,project=project_id)
 def home():
     return '''<h1>WhaleSafe API</h1>
 <p>A prototype API for AIS Message json and geojson.</p>
-<a href="http://api.ships4whales.org/api/v1/stats/mmsi"</a>
-<p> http://api.ships4whales.org/api/v1/stats/mmsi </p>
-<a href="http://api.ships4whales.org/api/v1/stats/operator"</a>
-<p> http://api.ships4whales.org/api/v1/stats/operator </p>
-<a href="http://api.ships4whales.org/api/v1/geo_2 "</a>
-<p> http://api.ships4whales.org/api/v1/geo_2 </p> 
+<a href="http://api.ships4whales.org/api/v1/stats/mmsi.json"</a>
+<p>http://api.ships4whales.org/api/v1/stats/mmsi.json </p>
+<a href="http://api.ships4whales.org/api/v1/stats/operator.json"</a>
+<p> http://api.ships4whales.org/api/v1/stats/operator.json </p>
+<a href="http://api.ships4whales.org/api/v1/geo.json "</a>
+<p> http://api.ships4whales.org/api/v1/geo.json </p> 
 '''
 
 # http://127.0.0.1:5000/api/v1/geo_1
@@ -82,7 +82,7 @@ def api_geo_1():
     return Response(geojson, mimetype='application/json')
 
 # http://127.0.0.1:5000/api/v1/geo.json
-@app.route('/api/v1/geo_2', methods=['GET'])
+@app.route('/api/v1/geo.json', methods=['GET'])
 @cross_origin()
 def api_geo_2():
     # Query BigQuery table
@@ -103,8 +103,8 @@ def api_geo_2():
     def data2geojson(df):
         features = []
         insert_features = lambda X: features.append(
-                geojson.Feature(geometry=geojson.LineString(([X["lead_lon"], X["lead_lat"], X["unix_micros"]],
-                                                             [X["lon"], X["lat"], X["unix_micros"]])),
+                geojson.Feature(geometry=geojson.LineString(([X["lead_lon"], X["lead_lat"], X["calculated_knots"], X["unix_micros"]],
+                                                             [X["lon"], X["lat"], X["calculated_knots"], X["unix_micros"]])),
                                 properties=dict(date=X["date"],
                                                 mmsi=X["mmsi"],
                                                 operator=X["operator"],
@@ -134,7 +134,7 @@ def api_stats():
 
 # This iis a super lazy function, but it spits out a json
     # http://127.0.0.1:5000/api/v1/stats/mmsi.json
-@app.route('/api/v1/stats/mmsi', methods=['GET'])
+@app.route('/api/v1/stats/mmsi.json', methods=['GET'])
 @cross_origin()
 def api_ship_stats():
     sql = """SELECT * FROM `benioff-ocean-initiative.whalesafe_ais.mmsi_cooperation_stats`;"""
@@ -144,7 +144,7 @@ def api_ship_stats():
          
 # This iis a super lazy function, but it spits out a json
     # http://127.0.0.1:5000/api/v1/stats/operator.json
-@app.route('/api/v1/stats/operator', methods=['GET'])
+@app.route('/api/v1/stats/operator.json', methods=['GET'])
 @cross_origin()
 def api_operator_stats():
     sql = """SELECT * FROM `benioff-ocean-initiative.whalesafe_ais.operator_stats`;"""
