@@ -55,13 +55,14 @@ def api_geo():
 def api_geo_1():
     
     sql = ("""SELECT 
-           CAST(mmsi AS STRING) AS mmsi, 
-           CAST(timestamp AS STRING) AS timestamp, 
-           CAST(lon AS STRING) AS lon,
-           CAST(lat AS STRING) AS lat
-           
-           FROM `benioff-ocean-initiative.clustered_datasets.gfw_ihs_segments` 
-           WHERE DATE(timestamp) >= DATE_SUB(CURRENT_DATE(), INTERVAL 7 DAY);""") 
+        lon, lat, lead_lon, lead_lat, 
+        CAST(CAST(timestamp AS DATE) as string) as date,
+        UNIX_SECONDS(timestamp) as unix_secs,
+        CAST(mmsi AS STRING) AS mmsi,
+        operator AS operator,
+        CAST(calculated_knots AS FLOAT64) AS calculated_knots,
+        FROM `benioff-ocean-initiative.clustered_datasets.gfw_ihs_segments`  
+        WHERE DATE(timestamp) >= DATE(2020-04-23'')""") 
     df = client.query(sql).to_dataframe()
     
     def df_to_geojson(df, properties, lat='lat', lon='lon'):
@@ -89,11 +90,11 @@ def api_geo_2():
     sql = """SELECT 
         lon, lat, lead_lon, lead_lat, 
         CAST(CAST(timestamp AS DATE) as string) as date,
-        UNIX_MICROS(timestamp) as unix_micros,
-        CAST(mmsi AS FLOAT64) AS mmsi,
+        UNIX_SECONDS(timestamp) as unix_secs,
+        CAST(mmsi AS STRING) AS mmsi,
         operator AS operator,
         CAST(calculated_knots AS FLOAT64) AS calculated_knots,
-        FROM `benioff-ocean-initiative.scratch.gfw_ihs_segments` 
+        FROM `benioff-ocean-initiative.clustered_datasets.gfw_ihs_segments`  
         WHERE timestamp BETWEEN '2020-04-16' AND '2020-04-17';"""
 
     # Make into pandas dataframe
@@ -103,12 +104,12 @@ def api_geo_2():
     def data2geojson(df):
         features = []
         insert_features = lambda X: features.append(
-                geojson.Feature(geometry=geojson.LineString(([X["lead_lon"], X["lead_lat"], X["calculated_knots"], X["unix_micros"]],
-                                                             [X["lon"], X["lat"], X["calculated_knots"], X["unix_micros"]])),
+                geojson.Feature(geometry=geojson.LineString(([X["lead_lon"], X["lead_lat"], X["calculated_knots"], X["unix_secs"]],
+                                                             [X["lon"], X["lat"], X["calculated_knots"], X["unix_secs"]])),
                                 properties=dict(date=X["date"],
                                                 mmsi=X["mmsi"],
-                                                operator=X["operator"],
-                                                calculated_knots=X["calculated_knots"])))
+                                                operator=X["operator"]
+                                                )))
         df.apply(insert_features, axis=1)
         #with open('/Users/seangoral/bq_api_test/map1.geojson', 'w', encoding='utf8') as fp:
         geojson_obj = geojson.dumps(geojson.FeatureCollection(features, indent=2, sort_keys=True), sort_keys=True, ensure_ascii=False)
