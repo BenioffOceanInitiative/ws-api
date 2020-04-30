@@ -2,6 +2,8 @@ from flask import Flask, Response
 import pandas as pd
 import json
 import geojson
+import geopandas as gpd
+import shapely.wkt
 from google.cloud import bigquery
 from google.oauth2 import service_account
 from flask_cors import CORS, cross_origin
@@ -153,4 +155,32 @@ def api_operator_stats():
     json_obj = df.to_json( orient='records', lines=True)
     return Response(json_obj, mimetype='application/json')  
 
-app.run()
+# http://127.0.0.1:5000/api/v1/geo_1.json
+@app.route('/api/v1/geo_1.json', methods=['GET'])
+@cross_origin()
+def api_geojson_out():
+    sql = """SELECT 
+        mmsi,
+        DATE(timestamp) as date,
+        ( ST_UNION_AGG (linestring)) AS linestring
+        FROM `benioff-ocean-initiative.clustered_datasets.gfw_ihs_segments` 
+        WHERE DATE(timestamp) > "2020-04-23" 
+        group by mmsi, date
+        """
+
+    df = client.query(sql).to_dataframe()
+    geometry = df['linestring'].map(shapely.wkt.loads)
+    df = df.drop('linestring', axis=1)
+    crs = {'init': 'epsg:4326'}
+    gdf = gpd.GeoDataFrame(df, crs=crs, geometry=geometry)
+    
+    gdf['date'] = pd.to_datetime(gdf['date'], format='%Y-%m-%d')
+    gdf['date'] = gdf['date'].dt.strftime('%Y-%m-%d')
+        
+    #schema = gpd.io.file.infer_schema(gdf)
+    #print(schema)
+    json_obj = json.dumps(shapely.geometry.mapping(gdf))
+    
+    return Response(json_obj, mimetype='application/json')
+
+#app.run()
