@@ -11,6 +11,7 @@ from flask_cors import CORS, cross_origin
 app = Flask(__name__)
 cors = CORS(app)
 app.config['CORS_HEADERS'] = 'Content-Type'
+#app.config['JSONIFY_PRETTYPRINT_REGULAR'] = True
 
 #FILL IN YOUR PATH TO THE 'Benioff Ocean Initiative-454f666d1896.json'
 #credentials_json = '/Users/seangoral/bq_api_test/venv/Benioff Ocean Initiative-454f666d1896.json'
@@ -31,8 +32,8 @@ def home():
 <p>http://api.ships4whales.org/api/v1/stats/mmsi.json </p>
 <a href="http://api.ships4whales.org/api/v1/stats/operator.json"</a>
 <p> http://api.ships4whales.org/api/v1/stats/operator.json </p>
-<a href="http://api.ships4whales.org/api/v1/geo.json "</a>
-<p> http://api.ships4whales.org/api/v1/geo.json </p> 
+<a href="http://api.ships4whales.org/api/v1/geo_simp.json "</a>
+<p> http://api.ships4whales.org/api/v1/geo_simp.json </p> 
 '''
     
 # http://127.0.0.1:5000/api/v1/geo_1
@@ -164,10 +165,10 @@ def api_geojson_out():
     
     return Response(json_obj, mimetype='application/json')
 
-# http://127.0.0.1:5000/api/v1/geo_simp.json
-@app.route('/api/v1/geo_simp.json', methods=['GET'])
+# http://127.0.0.1:5000/api/v1/geo_simplify.json
+@app.route('/api/v1/geo_simplify.json', methods=['GET'])
 @cross_origin()
-def api_geojson_simp():
+def api_geojson_simplify():
     sql = """SELECT 
         mmsi,
         DATE(timestamp) as date,
@@ -182,8 +183,7 @@ def api_geojson_simp():
     crs = {'init': 'epsg:4326'}
     gdf = gpd.GeoDataFrame(df, crs=crs, geometry=geometry)
     
-    gdf_simplified = gdf.copy()
-    #gdf_simplified = gdf
+    gdf_simplified = gdf
     gdf_simplified["geometry"] = gdf.geometry.simplify(tolerance=0.015, preserve_topology=True)
     
     gdf_simplified['date'] = pd.to_datetime(gdf_simplified['date'], format='%Y-%m-%d')
@@ -192,5 +192,31 @@ def api_geojson_simp():
     json_obj = json.dumps(shapely.geometry.mapping(gdf_simplified))
     
     return Response(json_obj, mimetype='application/json')
+
+    # http://127.0.0.1:5000/api/v1/geo_simp.json
+@app.route('/api/v1/geo_simp.json', methods=['GET'])
+@cross_origin()
+def api_geojson_simp():
+    sql = """SELECT  
+           CAST(mmsi AS STRING) AS mmsi, 
+           CAST(operator AS STRING) AS operator, 
+           CAST(avg_speed_knots AS STRING) AS avg_speed_knots, 
+           CAST(avg_implied_speed_knots AS STRING) AS avg_implied_speed_knots,
+           CAST(timestamp AS STRING) AS timestamp,
+           CAST(TIMESTAMP_SECONDS(timestamp) AS STRING) AS date,
+           CAST(wkt AS STRING) AS wkt 
+           FROM  `benioff-ocean-initiative.scratch.gfw_ihs_simple_segs`
+           where TIMESTAMP_SECONDS(timestamp) >= '2020-04-01';"""
+    
+    df = client.query(sql).to_dataframe()
+    geometry = df['wkt'].map(shapely.wkt.loads)
+    df = df.drop('wkt', axis=1)
+    crs = {'init': 'epsg:4326'}
+    gdf = gpd.GeoDataFrame(df, crs=crs, geometry=geometry)
+
+    json_obj = json.dumps(shapely.geometry.mapping(gdf), indent=2)
+    
+    return Response(json_obj, mimetype='application/json')
+
     
 #app.run()
