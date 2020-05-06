@@ -206,7 +206,7 @@ def api_geojson_simp():
            CAST(TIMESTAMP_SECONDS(timestamp) AS STRING) AS date,
            CAST(wkt AS STRING) AS wkt 
            FROM  `benioff-ocean-initiative.scratch.gfw_ihs_simple_segs`
-           where TIMESTAMP_SECONDS(timestamp) >= '2020-04-01';"""
+           where TIMESTAMP_SECONDS(timestamp) >= '2020-04-15';"""
     
     df = client.query(sql).to_dataframe()
     geometry = df['wkt'].map(shapely.wkt.loads)
@@ -214,7 +214,7 @@ def api_geojson_simp():
     crs = {'init': 'epsg:4326'}
     gdf = gpd.GeoDataFrame(df, crs=crs, geometry=geometry)
 
-    json_obj = json.dumps(shapely.geometry.mapping(gdf), indent=2)
+    json_obj = json.dumps(shapely.geometry.mapping(gdf))
     
     return Response(json_obj, mimetype='application/json')
 
