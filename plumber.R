@@ -7,6 +7,7 @@ library(sf)
 library(geojsonsf)
 library(jsonlite)
 library(bigrquery)
+library(RPostgres)
 
 # OLD: Amazon RDS
 # db_yml  <- file.path(dir_api, ".amazon_rds.yml")
@@ -26,6 +27,24 @@ con <- dbConnect(
   project = "benioff-ocean-initiative",
   dataset = "whalesafe_ais",
   billing = "benioff-ocean-initiative")
+
+# connection to database
+con <- DBI::dbConnect(
+  RPostgres::Postgres(),
+  dbname   = "gis",
+  host     = "s4w-postgis",
+  port     = 5432,
+  user     = "admin",
+  password = "whalestrike")
+#dbListTables(con)  
+  
+
+"SELECT JSON_BUILD_OBJECT(
+  'type', 'FeatureCollection',
+  'features', JSON_AGG(ST_AsGeoJSON(*)::JSON)
+)
+FROM segs;"
+
 
 # dbListTables(con)
 

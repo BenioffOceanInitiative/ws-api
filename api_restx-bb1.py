@@ -3,6 +3,7 @@ from flask import Flask #, Blueprint
 #from flask_restplus import Api, Resource
 #from flask_restplus import Api
 from flask_restx import Resource, Api
+# https://flask-restx.readthedocs.io/
 #werkzeug.cached_property = werkzeug.utils.cached_property
 #from flask.ext.restplus import Api
 
@@ -14,7 +15,7 @@ from google.oauth2 import service_account
 from werkzeug.contrib.fixers import ProxyFix
 
 app = Flask(__name__)
-api = Api(app = app)
+#api = Api(app = app)
 app.wsgi_app = ProxyFix(app.wsgi_app)
 api = Api(
     app, version='0.1', title='WhaleSafe API', 

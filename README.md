@@ -70,6 +70,7 @@ pip install pandas
 pip install geojson
 pip install google-cloud-bigquery
 pip install google-oauth
+pip install postgis
 ```
 
 

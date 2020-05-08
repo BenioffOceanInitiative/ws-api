@@ -172,7 +172,8 @@ def api_geojson_simplify():
     sql = """SELECT 
         mmsi,
         DATE(timestamp) as date,
-        ( ST_UNION_AGG (linestring)) AS linestring
+        -- ( ST_UNION_AGG (linestring)) AS linestring
+        linestring
         FROM `benioff-ocean-initiative.clustered_datasets.gfw_ihs_segments` 
         WHERE DATE(timestamp) > "2020-04-20" 
         group by mmsi, date
