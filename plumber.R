@@ -39,12 +39,12 @@ con <- DBI::dbConnect(
 #dbListTables(con)  
   
 
-"SELECT JSON_BUILD_OBJECT(
+sql <- "SELECT JSON_BUILD_OBJECT(
   'type', 'FeatureCollection',
-  'features', JSON_AGG(ST_AsGeoJSON(*)::JSON)
+  'features', JSON_AGG(ST_AsGeoJSON(mmsi, operator, day, geom_smpl015)::JSON)
 )
 FROM segs;"
-
+res <- dbGetQuery(con, sql)
 
 # dbListTables(con)
 
