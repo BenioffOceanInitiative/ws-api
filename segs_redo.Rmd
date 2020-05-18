@@ -60,9 +60,11 @@ library(leaflet)
 library(DT)
 here = here::here
 
-d_csv    <- here("data/gfw_data_2020-04-02-to-04.csv")
-top3_csv <- here("data/gfw_data_2020-04-02-to-04_top3.csv")
-lns_geo  <- here("data/gfw_data_2020-04-02-to-04_top3_lns.geojson")
+d_csv       <- here("data/gfw_data_2020-04-02-to-04.csv")
+top3_csv    <- here("data/gfw_data_2020-04-02-to-04_top3.csv")
+lns_geo     <- here("data/gfw_data_2020-04-02-to-04_top3_lns.geojson")
+lns_s05_geo <- here("data/gfw_data_2020-04-02-to-04_top3_lns_s05.geojson")
+lns_s3_geo  <- here("data/gfw_data_2020-04-02-to-04_top3_lns_s3.geojson")
 ```
 
 
@@ -181,19 +183,55 @@ write_sf(lns, lns_geo, delete_dsn = T)
 
 lns <- read_sf(lns_geo)
 
-pal <- colorFactor("Spectral", lns$speed_calc_bin, ordered = T)
+lns$speed_calc_bin <- factor(
+  lns$speed_calc_bin, 
+  c("(0,10]", "(10,12]", "(12,15]", "(15,Inf]"), 
+  ordered = T)
+
+pal <- colorFactor("YlOrRd", lns$speed_calc_bin, ordered = T)
 
 leaflet(lns) %>%
   addProviderTiles(
     providers$Esri.OceanBasemap,
     options = providerTileOptions(
-      opacity = 0.5)) %>% 
+      opacity = 0.7)) %>% 
   addPolylines(
       color = ~pal(speed_calc_bin),
       label = ~speed_calc_bin,
-      opacity = 0.8) %>% 
+      opacity = 0.7) %>% 
   addLegend(
       pal = pal, values = ~speed_calc_bin, title = "Speed bin (knots)")
 ```
 
+## simplify line segments
 
+```{r}
+library(rmapshaper)
+library(fs)
+
+# keep 5% of points (default)
+lns_s05 <- ms_simplify(lns, keep = 0.05)
+write_sf(lns_s05, lns_s05_geo, delete_dsn = T)
+
+# keep 30% of points
+lns_s3 <- ms_simplify(lns, keep = 0.3)
+write_sf(lns_s3, lns_s3_geo, delete_dsn = T)
+
+# display file sizes
+dir_info(here("data"), regexp = "geojson$") %>% 
+  mutate(
+    file = basename(path)) %>% 
+  select(file, size)
+
+leaflet(lns_s05) %>%
+  addProviderTiles(
+    providers$Esri.OceanBasemap,
+    options = providerTileOptions(
+      opacity = 0.7)) %>% 
+  addPolylines(
+    color = ~pal(speed_calc_bin),
+    label = ~speed_calc_bin,
+    opacity = 0.7) %>% 
+  addLegend(
+    pal = pal, values = ~speed_calc_bin, title = "Speed bin (knots)")
+```
