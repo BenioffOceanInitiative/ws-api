@@ -61,6 +61,7 @@ library(DT)
 # library(bigrquery)
 # library(rmapshaper)
 library(fs)
+library(leafsync)
 here = here::here
 
 d_csv       <- here("data/gfw_data_2020-04-02-to-04.csv")
@@ -214,18 +215,22 @@ lns <- pts %>%
   filter(npts > 1)
 
 write_sf(lns, lns_geo, delete_dsn = T)
+```
 
+## map segments
+
+```{r}
 lns <- read_sf(lns_geo)
 
 speed_calc_bins <- c("[ 0, 10 ]", "(10,12]", "(12,15]", "(15,Inf]")
 
-setdiff(unique(lns$speed_calc_bin), speed_calc_bins)
+stopifnot(length(setdiff(unique(lns$speed_calc_bin), speed_calc_bins)) == 0)
 
 lns$speed_calc_bin <- factor(lns$speed_calc_bin, speed_calc_bins, ordered = T)
 
 pal <- colorFactor("YlOrRd", lns$speed_calc_bin, ordered = T)
 
-leaflet() %>%
+map_lns <- leaflet() %>%
   addProviderTiles(
     providers$Esri.OceanBasemap,
     options = providerTileOptions(
@@ -238,6 +243,7 @@ leaflet() %>%
   addLegend(
     data = lns,
     pal = pal, values = ~speed_calc_bin, title = "Speed bin (knots)")
+map_lns
 ```
 
 ## simplify line segments
@@ -299,11 +305,15 @@ dir_info(here("data"), regexp = "(top3_lns\\.geojson$)|(lns_d[0-9]+\\.geojson$)"
   mutate(
     file = basename(path)) %>% 
   select(file, size)
+```
 
+## map compare simplified segments
+
+```{r}
 lns_d05 <- read_sf(lns_d05_geo)
 lns_d05$speed_calc_bin <- factor(lns_d05$speed_calc_bin, speed_calc_bins, ordered = T)
 
-leaflet(lns_d05) %>%
+map_lns_d05 <- leaflet(lns_d05) %>%
   addProviderTiles(
     providers$Esri.OceanBasemap,
     options = providerTileOptions(
@@ -314,4 +324,7 @@ leaflet(lns_d05) %>%
     opacity = 0.7) %>% 
   addLegend(
     pal = pal, values = ~speed_calc_bin, title = "Speed bin (knots)<br> <small>st_simplify(dTolerance=0.05)</small>")
+
+sync(map_lns, map_lns_d05)
 ```
+
