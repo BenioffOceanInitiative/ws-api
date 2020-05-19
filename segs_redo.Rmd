@@ -58,13 +58,29 @@ library(lubridate)
 library(mapview)
 library(leaflet)
 library(DT)
+# library(bigrquery)
+# library(rmapshaper)
+library(fs)
 here = here::here
 
 d_csv       <- here("data/gfw_data_2020-04-02-to-04.csv")
 top3_csv    <- here("data/gfw_data_2020-04-02-to-04_top3.csv")
 lns_geo     <- here("data/gfw_data_2020-04-02-to-04_top3_lns.geojson")
-lns_s05_geo <- here("data/gfw_data_2020-04-02-to-04_top3_lns_s05.geojson")
-lns_s3_geo  <- here("data/gfw_data_2020-04-02-to-04_top3_lns_s3.geojson")
+# lns_s05_geo <- here("data/gfw_data_2020-04-02-to-04_top3_lns_s05.geojson")
+# lns_s3_geo  <- here("data/gfw_data_2020-04-02-to-04_top3_lns_s3.geojson")
+lns_d01_geo <- here("data/gfw_data_2020-04-02-to-04_top3_lns_d01.geojson")
+lns_d05_geo <- here("data/gfw_data_2020-04-02-to-04_top3_lns_d05.geojson")
+lns_d1_geo  <- here("data/gfw_data_2020-04-02-to-04_top3_lns_d1.geojson")
+
+#service_account_json <- "/home/admin/Benioff Ocean Initiative-454f666d1896.json"
+# service_account_json <- "/Volumes/GoogleDrive/My Drive/projects/whalesafe/data/gfw/Benioff Ocean Initiative-454f666d1896.json"
+# 
+# bq_auth(path = service_account_json)
+# bq <- dbConnect(
+#   bigquery(),
+#   project = "benioff-ocean-initiative",
+#   dataset = "whalesafe_ais",
+#   billing = "benioff-ocean-initiative")
 ```
 
 
@@ -97,6 +113,8 @@ top3 %>% datatable()
 
 ## calculate speed bins
 
+TODO: Add last row of ships already in from previous day if present at beginning.
+
 ```{r}
 pts <- read_csv(top3_csv) %>% 
   st_as_sf(coords = c("lon", "lat"), crs = 4326, remove = F)
@@ -107,14 +125,14 @@ pts <- pts %>%
   arrange(mmsi, timestamp) %>% 
   mutate(
     date = date(timestamp)) %>% 
-  group_by(mmsi, date) %>% # IMPORTANT!
+  group_by(mmsi) %>% # IMPORTANT!
   mutate(
     calc_time_s      = difftime(
-      lead(timestamp), timestamp, units = "secs") 
-      %>% as.numeric(),
+      lead(timestamp), timestamp, units = "secs") %>% 
+      as.numeric(),
     calc_dist_m      = st_distance(
-      geometry, lead(geometry, default = empty), by_element = TRUE) 
-      %>% set_units(m) %>% as.numeric(),
+      geometry, lead(geometry, default = empty), by_element = TRUE) %>%
+      set_units(m) %>% as.numeric(),
     speed_calc_knots = calc_dist_m / calc_time_s * 1.94384)
 
 hist(pts$speed_calc_knots)
@@ -122,7 +140,7 @@ hist(pts$speed_calc_knots)
 speed_bins = c(0, 10, 12, 15, Inf)
 pts <- pts %>%
   mutate(
-    speed_calc_bin = cut(speed_calc_knots, speed_bins))
+    speed_calc_bin = cut(speed_calc_knots, speed_bins, include.lowest = T))
 
 ggplot(aes(x = speed_calc_bin), data = pts) +
   geom_bar()
@@ -134,20 +152,37 @@ ggplot(aes(x = speed_calc_bin), data = pts) +
 # identify rows ending a segment
 pts <- pts %>%
   mutate(
-    seg_chg = 
-      (lead(speed_calc_bin) != speed_calc_bin) | 
-      (timestamp == max(timestamp)))
+    seg_chg = (lead(speed_calc_bin) != speed_calc_bin), 
+    # set NA endpoints to 0 to include in segment
+    seg_chg = replace_na(seg_chg, F)) %>% 
+  ungroup()
 
 # repeat rows to begin the next segment
 pts <- rbind(
+  # original points
+  pts,
+  # duplicate points for change in speed
   pts %>% 
-    ungroup(),
-  pts %>% 
-    ungroup() %>% 
     filter(
       seg_chg) %>% 
     mutate(
-      seg_chg = F)) %>% 
+      seg_chg = F),
+  # duplicate points for previous day
+  pts %>% 
+    group_by(mmsi, date) %>% 
+    filter(
+      timestamp == max(timestamp)) %>% 
+    mutate(
+      seg_chg = F) %>% 
+    # drop last day though
+    group_by(mmsi) %>% 
+    filter(
+      timestamp != max(timestamp)) %>% 
+    # add row to next day
+    ungroup() %>%
+    mutate(
+      date = date + days(1))) %>% 
+  # arrange and group
   arrange(
     mmsi, timestamp, seg_chg) %>% 
   group_by(mmsi, date)
@@ -157,14 +192,8 @@ pts <- pts %>%
   mutate(
     seg_id  = cumsum(seg_chg))
 
-pts %>%
-  st_drop_geometry() %>%
-  filter(
-    mmsi == 303031000, 
-    date ==	'2020-04-04', 
-    seg_id %in% 24:26) %>%
-  datatable()
-
+# check that every row has a seg_id assigned
+stopifnot(sum(is.na(pts$seg_id)) == 0) 
 ```
 
 ## construct line segments
@@ -178,52 +207,103 @@ lns <- pts %>%
     timestamp_end        = max(timestamp),
     speed_calc_knots_avg = mean(speed_calc_knots, na.rm = T),
     geom = st_union(geometry) %>% 
-      st_cast("LINESTRING"))
+      st_cast("LINESTRING")) %>% 
+  # remove lines with < 2 points
+  mutate(
+    npts = map_int(geom, function(x) npts(x))) %>% 
+  filter(npts > 1)
+
 write_sf(lns, lns_geo, delete_dsn = T)
 
 lns <- read_sf(lns_geo)
 
-lns$speed_calc_bin <- factor(
-  lns$speed_calc_bin, 
-  c("(0,10]", "(10,12]", "(12,15]", "(15,Inf]"), 
-  ordered = T)
+speed_calc_bins <- c("[ 0, 10 ]", "(10,12]", "(12,15]", "(15,Inf]")
+
+setdiff(unique(lns$speed_calc_bin), speed_calc_bins)
+
+lns$speed_calc_bin <- factor(lns$speed_calc_bin, speed_calc_bins, ordered = T)
 
 pal <- colorFactor("YlOrRd", lns$speed_calc_bin, ordered = T)
 
-leaflet(lns) %>%
+leaflet() %>%
   addProviderTiles(
     providers$Esri.OceanBasemap,
     options = providerTileOptions(
       opacity = 0.7)) %>% 
   addPolylines(
-      color = ~pal(speed_calc_bin),
-      label = ~speed_calc_bin,
-      opacity = 0.7) %>% 
+    data = lns %>% filter(!is.na(seg_id)),
+    color = ~pal(speed_calc_bin),
+    label = ~speed_calc_bin,
+    opacity = 0.7) %>% 
   addLegend(
-      pal = pal, values = ~speed_calc_bin, title = "Speed bin (knots)")
+    data = lns,
+    pal = pal, values = ~speed_calc_bin, title = "Speed bin (knots)")
 ```
 
 ## simplify line segments
 
-```{r}
-library(rmapshaper)
-library(fs)
+OLD: `rmapshaper::ms_simplify()`
 
+```{r, eval = F}
 # keep 5% of points (default)
-lns_s05 <- ms_simplify(lns, keep = 0.05)
+lns_s05 <- ms_simplify(lns, keep = 0.05) %>% 
+  mutate(
+    npts = map_int(geometry, function(x) npts(x)))
 write_sf(lns_s05, lns_s05_geo, delete_dsn = T)
 
 # keep 30% of points
-lns_s3 <- ms_simplify(lns, keep = 0.3)
+lns_s3 <- ms_simplify(lns, keep = 0.3) %>% 
+  mutate(
+    npts = map_int(geometry, function(x) npts(x)))
 write_sf(lns_s3, lns_s3_geo, delete_dsn = T)
+```
+
+NEW: `sf::st_simplify()` more similar to PostGIS `ST_Simplify()`
+
+```{r}
+lns_smpl <- lns %>% 
+  # simplify and keep track of number of points per segment
+  mutate(
+    geom_d01    = st_simplify(geometry, dTolerance = 0.01),
+    geom_d05    = st_simplify(geometry, dTolerance = 0.05),
+    geom_d1     = st_simplify(geometry, dTolerance = 0.1),
+    npts_d01    = map_int(geom_d01, function(x) npts(x)),
+    npts_d05    = map_int(geom_d05, function(x) npts(x)),
+    npts_d1     = map_int(geom_d1 , function(x) npts(x)),
+    npts_d01dif = npts - npts_d01,
+    npts_d05dif = npts - npts_d05,
+    npts_d1dif  = npts - npts_d1) %>% 
+  arrange(desc(npts_d1dif))
+
+lns_d <- lns_smpl %>% 
+  st_drop_geometry() %>% 
+  select(
+    mmsi, date, 
+    timestamp_beg, timestamp_end,
+    speed_calc_bin, speed_calc_knots_avg,
+    starts_with("npts"))
+datatable(lns_d)
+
+lns_d %>% 
+  st_set_geometry(lns_smpl$geom_d01) %>% 
+  write_sf(lns_d01_geo, delete_dsn = T)
+lns_d %>% 
+  st_set_geometry(lns_smpl$geom_d05) %>% 
+  write_sf(lns_d05_geo, delete_dsn = T)
+lns_d %>% 
+  st_set_geometry(lns_smpl$geom_d1) %>% 
+  write_sf(lns_d1_geo, delete_dsn = T)
 
 # display file sizes
-dir_info(here("data"), regexp = "geojson$") %>% 
+dir_info(here("data"), regexp = "(top3_lns\\.geojson$)|(lns_d[0-9]+\\.geojson$)") %>% 
   mutate(
     file = basename(path)) %>% 
   select(file, size)
 
-leaflet(lns_s05) %>%
+lns_d05 <- read_sf(lns_d05_geo)
+lns_d05$speed_calc_bin <- factor(lns_d05$speed_calc_bin, speed_calc_bins, ordered = T)
+
+leaflet(lns_d05) %>%
   addProviderTiles(
     providers$Esri.OceanBasemap,
     options = providerTileOptions(
@@ -233,5 +313,5 @@ leaflet(lns_s05) %>%
     label = ~speed_calc_bin,
     opacity = 0.7) %>% 
   addLegend(
-    pal = pal, values = ~speed_calc_bin, title = "Speed bin (knots)")
+    pal = pal, values = ~speed_calc_bin, title = "Speed bin (knots)<br> <small>st_simplify(dTolerance=0.05)</small>")
 ```
