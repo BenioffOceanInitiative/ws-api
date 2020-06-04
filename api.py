@@ -48,7 +48,7 @@ def api_geo_1():
         CAST(mmsi AS STRING) AS mmsi,
         operator AS operator,
         CAST(calculated_knots AS FLOAT64) AS calculated_knots,
-        FROM `benioff-ocean-initiative.clustered_datasets.gfw_ihs_segments`  
+        FROM `benioff-ocean-initiative.whalesafe_ais.gfw_ihs_segments`  
         WHERE DATE(timestamp) >= DATE(2020-04-23'')""") 
     df = client.query(sql).to_dataframe()
     
@@ -81,7 +81,7 @@ def api_geo_2():
         CAST(mmsi AS STRING) AS mmsi,
         operator AS operator,
         CAST(calculated_knots AS FLOAT64) AS calculated_knots,
-        FROM `benioff-ocean-initiative.clustered_datasets.gfw_ihs_segments`  
+        FROM `benioff-ocean-initiative.whalesafe_ais.gfw_ihs_segments`  
         WHERE timestamp BETWEEN '2020-04-16' AND '2020-04-17';"""
 
     # Make into pandas dataframe
@@ -148,7 +148,7 @@ def api_geojson_out():
         mmsi,
         DATE(timestamp) as date,
         ( ST_UNION_AGG (linestring)) AS linestring
-        FROM `benioff-ocean-initiative.clustered_datasets.gfw_ihs_segments` 
+        FROM `benioff-ocean-initiative.whalesafe_ais.gfw_ihs_segments` 
         WHERE DATE(timestamp) > "2020-04-20" 
         group by mmsi, date
         """
@@ -172,10 +172,10 @@ def api_geojson_simplify():
     sql = """SELECT 
         mmsi,
         DATE(timestamp) as date,
-        -- ( ST_UNION_AGG (linestring)) AS linestring
-        linestring
-        FROM `benioff-ocean-initiative.clustered_datasets.gfw_ihs_segments` 
-        WHERE DATE(timestamp) > "2020-04-20" 
+        ( ST_UNION_AGG (linestring)) AS linestring
+        #linestring
+        FROM `benioff-ocean-initiative.whalesafe_ais.gfw_ihs_segments` 
+        WHERE DATE(timestamp) > "2020-05-10" 
         group by mmsi, date
         """
     df = client.query(sql).to_dataframe()
@@ -199,15 +199,19 @@ def api_geojson_simplify():
 @cross_origin()
 def api_geojson_simp():
     sql = """SELECT  
-           CAST(mmsi AS STRING) AS mmsi, 
-           CAST(operator AS STRING) AS operator, 
-           CAST(avg_speed_knots AS STRING) AS avg_speed_knots, 
-           CAST(avg_implied_speed_knots AS STRING) AS avg_implied_speed_knots,
-           CAST(timestamp AS STRING) AS timestamp,
-           CAST(TIMESTAMP_SECONDS(timestamp) AS STRING) AS date,
+           CAST(mmsi AS STRING) AS mmsi,
+           CAST(date AS STRING) AS date,
+           CAST( speed_bin_num AS STRING) AS speed_bin_num,
+           CAST(seg_id AS STRING) AS seg_id,
+           CAST(avg_speed_knots AS STRING) AS avg_speed_knots,
+           CAST(total_distance_nm AS STRING) AS total_distance_nm, 
+           CAST(unix_beg AS STRING) AS unix_beg, 
+           CAST(unix_end AS STRING) AS unix_end, 
+           CAST(timestamp_beg AS STRING) AS timestamp_beg,
+           CAST(timestamp_end AS STRING) AS timestamp_end,
            CAST(wkt AS STRING) AS wkt 
-           FROM  `benioff-ocean-initiative.scratch.gfw_ihs_simple_segs`
-           where TIMESTAMP_SECONDS(timestamp) >= '2020-04-15';"""
+           FROM  `benioff-ocean-initiative.test.may_simp_segments`
+           where TIMESTAMP_SECONDS(unix_timestamp) >= '2020-05-23';"""
     
     df = client.query(sql).to_dataframe()
     geometry = df['wkt'].map(shapely.wkt.loads)

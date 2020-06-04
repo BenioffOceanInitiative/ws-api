@@ -8,6 +8,8 @@ library(geojsonsf)
 library(jsonlite)
 library(bigrquery)
 library(RPostgres)
+library(leaflet)
+library(mapview)
 
 # OLD: Amazon RDS
 # db_yml  <- file.path(dir_api, ".amazon_rds.yml")
@@ -29,15 +31,94 @@ con <- dbConnect(
   billing = "benioff-ocean-initiative")
 
 # connection to database
-con <- DBI::dbConnect(
+pg_con <- DBI::dbConnect(
   RPostgres::Postgres(),
   dbname   = "gis",
   host     = "s4w-postgis",
   port     = 5432,
   user     = "admin",
   password = "whalestrike")
-#dbListTables(con)  
+#dbListTables(pg_con)  
   
+segs <- st_read(pg_con, "segs")
+sql_1 <- "SELECT mmsi, operator, day, geom, ST_NumPoints(geom) as num_pts FROM segs"
+sql_2 <- "SELECT mmsi, operator, day, ST_SIMPLIFY(geom, 0.015, True) AS geom, ST_NumPoints(ST_SIMPLIFY(geom, 0.015, True)) AS num_pts FROM segs"
+sql_3 <- "SELECT mmsi, operator, day, ST_SIMPLIFY(geom, 0.015, False) AS geom FROM segs"
+sql_4 <- "SELECT mmsi, operator, day, ST_SIMPLIFY(geom, 0.1, False) AS geom FROM segs"
+sql_5 <- "SELECT mmsi, operator, day, ST_SIMPLIFY(geom, 0.5, False) AS geom FROM segs"
+segs_1 <- st_read(pg_con, query = sql_1); object.size(segs_1) # 7,401,080 bytes
+segs_2 <- st_read(pg_con, query = sql_2); object.size(segs_2) # 7396568 bytes
+segs_3 <- st_read(pg_con, query = sql_3); object.size(segs_3) # 7262224 bytes
+segs_4 <- st_read(pg_con, query = sql_4); object.size(segs_4) # 7262224 bytes
+segs_5 <- st_read(pg_con, query = sql_5); object.size(segs_5) # 7262224 bytes
+
+sql_lns <- "
+  SELECT 
+    mmsi, 
+    operator, day, 
+    timestamp, segment_time_minutes,
+    distance_km, implied_speed_knots,
+    linestring, 
+    ST_GeomFromText(linestring) as geom, 
+    ST_NumPoints(ST_GeomFromText(linestring)) as num_pts,
+    ST_GeometryType(ST_GeomFromText(linestring)) as geom_type
+  FROM lns 
+  WHERE 
+    mmsi = 367533290 AND operator = 'Cheramie Marine LLC' AND day = '2020-04-21' AND
+    ST_GeometryType(ST_GeomFromText(linestring)) = 'ST_LineString'"
+lns <- st_read(pg_con, query = sql_lns)
+table(lns$num_pts, useNA = "ifany")
+lns$geom
+
+table(lns$implied_speed_knots)
+
+
+lns %>% 
+  mutate(
+    geom_txt = st_as_text(geom)) %>% 
+  st_drop_geometry() %>% 
+  View()
+
+
+sql_ln <- "
+  SELECT 
+    mmsi, operator, day, 
+    ST_MakeLine( (ST_DumpPoints(ST_GeomFromText(linestring))).geom ) AS ln
+  FROM lns 
+  WHERE 
+    mmsi = 367533290 AND operator = 'Cheramie Marine LLC' AND day = '2020-04-21' AND
+    ST_GeometryType(ST_GeomFromText(linestring)) = 'ST_LineString'
+  GROUP BY mmsi, operator, day
+"
+ln <- st_read(pg_con, query = sql_ln)
+
+
+
+
+segs_6 <- segs_1 %>% 
+  mutate(
+    geom = st_simplify(geom, dTolerance = 1))
+object.size(segs_6) # 7,396,568 bytes
+mapview(segs_4)
+
+
+segs_wkt <- segs_1 %>% 
+  mutate(
+    geom_wkt = st_as_text(geom)) %>% 
+  st_drop_geometry() %>% 
+  pull(geom_wkt)
+nchar(segs_wkt) # 1209250
+
+stringr::str_trunc(segs_wkt, 400)
+
+  
+segs_simple <- st_read(pg_con, query = sql)
+mapview(segs)
+
+segs_1 %>% 
+  mutate(
+    num_pts = sf::st_
+  )
 
 sql <- "SELECT JSON_BUILD_OBJECT(
   'type', 'FeatureCollection',
