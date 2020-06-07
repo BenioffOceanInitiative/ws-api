@@ -1,135 +1,27 @@
-library(here) # TODO: depend on here in whalesafe4r
+library(here)
 library(glue)
 library(DBI)
-library(dplyr)
-library(readr)
-library(sf)
-library(geojsonsf)
-library(jsonlite)
-library(bigrquery)
 library(RPostgres)
-library(leaflet)
-library(mapview)
+#library(dplyr)
+#library(readr)
+library(sf)
+#library(geojsonsf)
+#library(jsonlite)
+# library(leaflet)
+# library(mapview)
 
-# OLD: Amazon RDS
-# db_yml  <- file.path(dir_api, ".amazon_rds.yml")
-# 
-# # library(s4wr)                        # normal:    load installed library
-# devtools::load_all("/srv/whalesafe4r") # developer: load source library
-# 
-# # connect to database
-# con    <- db_connect(db_yml)
-
-service_account_json <- "/home/admin/Benioff Ocean Initiative-454f666d1896.json"
-
-bq_auth(path = service_account_json)
-
-con <- dbConnect(
-  bigquery(),
-  project = "benioff-ocean-initiative",
-  dataset = "whalesafe_ais",
-  billing = "benioff-ocean-initiative")
+passwd <- readLines("/home/admin/ws_admin_pass.txt")
 
 # connection to database
-pg_con <- DBI::dbConnect(
+con <- DBI::dbConnect(
   RPostgres::Postgres(),
   dbname   = "gis",
-  host     = "s4w-postgis",
+  host     = "ws-postgis",
   port     = 5432,
   user     = "admin",
-  password = "whalestrike")
-#dbListTables(pg_con)  
-  
-segs <- st_read(pg_con, "segs")
-sql_1 <- "SELECT mmsi, operator, day, geom, ST_NumPoints(geom) as num_pts FROM segs"
-sql_2 <- "SELECT mmsi, operator, day, ST_SIMPLIFY(geom, 0.015, True) AS geom, ST_NumPoints(ST_SIMPLIFY(geom, 0.015, True)) AS num_pts FROM segs"
-sql_3 <- "SELECT mmsi, operator, day, ST_SIMPLIFY(geom, 0.015, False) AS geom FROM segs"
-sql_4 <- "SELECT mmsi, operator, day, ST_SIMPLIFY(geom, 0.1, False) AS geom FROM segs"
-sql_5 <- "SELECT mmsi, operator, day, ST_SIMPLIFY(geom, 0.5, False) AS geom FROM segs"
-segs_1 <- st_read(pg_con, query = sql_1); object.size(segs_1) # 7,401,080 bytes
-segs_2 <- st_read(pg_con, query = sql_2); object.size(segs_2) # 7396568 bytes
-segs_3 <- st_read(pg_con, query = sql_3); object.size(segs_3) # 7262224 bytes
-segs_4 <- st_read(pg_con, query = sql_4); object.size(segs_4) # 7262224 bytes
-segs_5 <- st_read(pg_con, query = sql_5); object.size(segs_5) # 7262224 bytes
+  password = passwd)
 
-sql_lns <- "
-  SELECT 
-    mmsi, 
-    operator, day, 
-    timestamp, segment_time_minutes,
-    distance_km, implied_speed_knots,
-    linestring, 
-    ST_GeomFromText(linestring) as geom, 
-    ST_NumPoints(ST_GeomFromText(linestring)) as num_pts,
-    ST_GeometryType(ST_GeomFromText(linestring)) as geom_type
-  FROM lns 
-  WHERE 
-    mmsi = 367533290 AND operator = 'Cheramie Marine LLC' AND day = '2020-04-21' AND
-    ST_GeometryType(ST_GeomFromText(linestring)) = 'ST_LineString'"
-lns <- st_read(pg_con, query = sql_lns)
-table(lns$num_pts, useNA = "ifany")
-lns$geom
-
-table(lns$implied_speed_knots)
-
-
-lns %>% 
-  mutate(
-    geom_txt = st_as_text(geom)) %>% 
-  st_drop_geometry() %>% 
-  View()
-
-
-sql_ln <- "
-  SELECT 
-    mmsi, operator, day, 
-    ST_MakeLine( (ST_DumpPoints(ST_GeomFromText(linestring))).geom ) AS ln
-  FROM lns 
-  WHERE 
-    mmsi = 367533290 AND operator = 'Cheramie Marine LLC' AND day = '2020-04-21' AND
-    ST_GeometryType(ST_GeomFromText(linestring)) = 'ST_LineString'
-  GROUP BY mmsi, operator, day
-"
-ln <- st_read(pg_con, query = sql_ln)
-
-
-
-
-segs_6 <- segs_1 %>% 
-  mutate(
-    geom = st_simplify(geom, dTolerance = 1))
-object.size(segs_6) # 7,396,568 bytes
-mapview(segs_4)
-
-
-segs_wkt <- segs_1 %>% 
-  mutate(
-    geom_wkt = st_as_text(geom)) %>% 
-  st_drop_geometry() %>% 
-  pull(geom_wkt)
-nchar(segs_wkt) # 1209250
-
-stringr::str_trunc(segs_wkt, 400)
-
-  
-segs_simple <- st_read(pg_con, query = sql)
-mapview(segs)
-
-segs_1 %>% 
-  mutate(
-    num_pts = sf::st_
-  )
-
-sql <- "SELECT JSON_BUILD_OBJECT(
-  'type', 'FeatureCollection',
-  'features', JSON_AGG(ST_AsGeoJSON(mmsi, operator, day, geom_smpl015)::JSON)
-)
-FROM segs;"
-res <- dbGetQuery(con, sql)
-
-# dbListTables(con)
-
-dir_api <- "/srv/ws-api"
+# dbListTables(con)  
 
 #* page through operators as JSON
 #* @param sort_by field to sort by; default = operator
@@ -303,128 +195,91 @@ function(){
 
 #* return GeoJSON of ship segments
 #* @param mmsi AIS ship ID, eg 248896000
-#* @param date_beg begin date, preferably in format YYYY-mm-dd, eg 2019-10-01
-#* @param date_end end date, preferably in format YYYY-mm-dd, eg 2019-10-07
+#* @param date_beg begin date, in format YYYY-mm-dd, eg 2019-10-01
+#* @param date_end end date, in format YYYY-mm-dd, eg 2019-10-07
 #* @param bbox bounding box in decimal degrees: lon_min,lat_min,lon_max,lat_max
+#* @param simplify simplification specifying tolerance (pre-rendered): 1km
 #* @serializer contentType list(type="application/json")
 #* @get /ship_segments
-function(bbox = NULL, date_end = NULL, date_beg = NULL, mmsi = NULL){
+function(bbox = NULL, date_end = NULL, date_beg = NULL, mmsi = NULL, simplify = NULL){
   # mmsi = 477136800
   
-  # cols <- "
-  #   name, mmsi, 
-  #   speed, seg_mins, seg_km, seg_kmhr, seg_knots, speed_diff, 
-  #   beg_dt, end_dt, 
-  #   beg_lon, beg_lat, end_lon, end_lat, 
-  #   geometry" # year, gid, geometry, date
-  # flds <- "
-  #   name_of_ship, mmsi, callsign, shiptype, imo_lr_ihs_no, length,
-  #   operator, operator_code,
-  #   timestamp, lon, lat,
-  #   distance, date_diff_minutes, speed_knots, implied_speed_knots, 
-  #   source,
-  #   ST_AsGeoJSON(linestring) as geom_txt" # length_km? beg_dt, end_dt, beg_lon, beg_lat, end_lon, end_lat?
+  # sql fields ----
+  if (!is.null(simplify)){
+    stopifnot(simplify %in% c("1km"))
+    fld_geom = glue("geom_s{simplify}")
+  } else{
+    fld_geom = "geom"
+  }
+  flds <- glue("
+    mmsi, date, seg_id, 
+    speed_bin_num, avg_speed_knots_final, 
+    total_distance_nm, 
+    timestamp_beg, timestamp_end, 
+    npts, {fld_geom} AS geom")
+  # TODO?: beg_lon, beg_lat, end_lon, end_lat?
   
-  flds <- "
-    mmsi, operator, day, 
-    ST_AsGeoJSON(geom_line) AS geom_txt"
-  # timestamp_daymin, timestamp_daymax, 
-  # speed_knots_daymin, speed_knots_daymax, speed_knots_dayavg, 
-  # implied_speed_knots_daymin, implied_speed_knots_dayavg, 
-  # distance_km_daymin, distance_km_daymax, distance_km_dayavg, 
-  # minutes_daymin, minutes_daymax, minutes_dayavg, 
-  # source_daycount_orbcomm, source_daycount_spire
-    
-  #sql <- glue("SELECT {flds} FROM gfw_ihs_segments")
-  sql <- glue("SELECT {flds} FROM clustered_datasets.gfw_ihs_segments_daily") # clusters rock!
-  
+  # sql where ----
   where <- c()
   
   if (!is.null(mmsi))
     where <- c(where, glue("mmsi = {mmsi}"))
   
   if (!is.null(date_beg))
-    where <- c(where, glue("day >= '{date_beg}'"))
+    where <- c(where, glue("date >= '{date_beg}'"))
   
   if (!is.null(date_end))
-    where <- c(where, glue("day <= '{date_end}'"))
+    where <- c(where, glue("date <= '{date_end}'"))
 
-  # bbox bounding box in decimal degrees: lon_min,lat_min,lon_max,lat_max
+  # sql where bbox ----
+  # bounding box in decimal degrees: lon_min,lat_min,lon_max,lat_max
   if (!is.null(bbox)){
 
     b <- strsplit(bbox, ",")[[1]] %>% as.numeric()
     x1 <- b[1]; y1 <- b[2]; x2 <- b[3]; y2 <- b[4]
-    sql_bbox <- glue("ST_Intersects(geom_line, 'SRID=4326;POLYGON(({x2} {y1}, {x2} {y2}, {x1} {y2}, {x1} {y1}, {x2} {y1}))')")
+    sql_bbox <- glue("ST_Intersects({fld_geom}, 'SRID=4326;POLYGON(({x2} {y1}, {x2} {y2}, {x1} {y2}, {x1} {y1}, {x2} {y1}))')")
   
     where <- c(where, sql_bbox)
   }
   
   if (length(where) > 0){
-    sql_where <- paste(where, collapse = " AND \n")
-    sql <- glue("{sql} WHERE {sql_where}")
+    sql_where <- paste(" AND ", paste(where, collapse = "AND \n"))
+  } else {
+    sql_where <- ""
   }
-  
-  # TEST: uncomment below for quick run of example ----
-  #
-  # sql <- "SELECT
-  #   name_of_ship, mmsi, callsign, shiptype, imo_lr_ihs_no, length,
-  #   operator, operator_code,
-  #   timestamp, lon, lat,
-  #   distance, date_diff_minutes, speed_knots, implied_speed_knots,
-  #   source,
-  #   ST_AsGeoJSON(linestring) as geom_txt 
-  # -- FROM whalesafe_ais.gfw_ihs_segments 
-  # FROM scratch.gfw_ihs_segments_geo_cluster_1
-  # WHERE DATE(timestamp) >= DATE '2017-01-01' AND DATE(timestamp) <= DATE '2017-01-07'"
-  
-  # sql <- "
-  #   SELECT
-  #     mmsi, operator, day,
-  #     ST_AsGeoJSON(geom_line) AS geom_txt
-  #   FROM
-  #     clustered_datasets.gfw_ihs_segments_daily
-  #   WHERE
-  #     day >= '2017-01-01' AND day <= '2017-01-07'
-  #     -- nrows: 342; 25 empty geom_txt?
-  #     -- NOT ST_ISEMPTY(geom_line)
-  #     -- LENGTH(ST_AsGeoJSON(geom_line)) > 0"
+
+  #[GeoJSON Features from PostGIS · Paul Ramsey](http://blog.cleverelephant.ca/2019/03/geojson.html)
+  sql <- glue(
+    "SELECT rowjsonb_to_geojson(to_jsonb(tbl.*)) AS txt
+    FROM (
+      SELECT {flds} 
+      FROM public.segs_rsample 
+      WHERE 
+        ST_GeometryType(geom) = 'ST_LineString' {sql_where}) tbl;")
   
   message(glue(
     "{Sys.time()}: dbGetQuery() begin
           sql:{sql}
-    
     "))
+  res <- dbGetQuery(con, sql)
+  #nrow(res)
+  # dbGetQuery(con, "SELECT * FROM public.segs_rsample") %>%  names() %>% paste(collapse = ", ")
+  # mmsi, date, 
+  #   speed_bin_num, seg_id, 
+  #   avg_speed_knots, avg_implied_speed_knots, avg_calculated_knots, avg_speed_knots_1, avg_speed_knots_final, 
+  #   total_distance_nm, 
+  #   seg_min, unix_beg, unix_end, 
+  #   timestamp_beg, timestamp_end, npts, 
+  #   geom_txt, geom, geom_s1km
   
-  segs <- dbGetQuery(con, sql) # 2s
-  
-  message(glue(
-    "{Sys.time()}: segs$geom = ..."))
-  
-  segs <- segs %>% 
-    mutate(
-      geom_nchar = nchar(geom_txt))
-  
-  message(glue(
-    "filtering rows with empty geometries: {sum(segs$geom_nchar == 0)}"))
-  
-  segs <- segs %>% 
-    filter(nchar(geom_txt) != 0)
-  
-  if (nrow(segs) == 0) return(list())
-  
-  segs <- segs %>% 
-    mutate(
-      geom = do.call(rbind, lapply(segs$geom_txt, read_sf))$geometry) %>% 
-    st_set_geometry("geom") %>% 
-    select(-geom_txt)
-  
-  message(glue(
-    "{Sys.time()}: sf_geojson()"))
-  
-  # message(glue(
-  #   "{Sys.time()}: done"))
-  
-  sf_geojson(segs)
+  #geojson <- here("data/tmp_segs_rsample_s1km_limit3.geojson")
+  paste(
+    '{
+    "type": "FeatureCollection","name": "WhaleSafe_API_segs","crs": 
+    { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+    "features": [',
+    paste(res$txt, collapse = ",\n"),
+    "]}") 
 }
 
 #* redirect to the swagger interface 
