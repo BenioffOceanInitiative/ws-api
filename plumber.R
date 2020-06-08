@@ -4,7 +4,7 @@ library(DBI)
 library(RPostgres)
 #library(dplyr)
 #library(readr)
-library(sf)
+#library(sf)
 #library(geojsonsf)
 #library(jsonlite)
 # library(leaflet)
@@ -253,7 +253,7 @@ function(bbox = NULL, date_end = NULL, date_beg = NULL, mmsi = NULL, simplify = 
     "SELECT rowjsonb_to_geojson(to_jsonb(tbl.*)) AS txt
     FROM (
       SELECT {flds} 
-      FROM public.segs_rsample 
+      FROM public.segs 
       WHERE 
         ST_GeometryType(geom) = 'ST_LineString' {sql_where}) tbl;")
   
@@ -262,17 +262,7 @@ function(bbox = NULL, date_end = NULL, date_beg = NULL, mmsi = NULL, simplify = 
           sql:{sql}
     "))
   res <- dbGetQuery(con, sql)
-  #nrow(res)
-  # dbGetQuery(con, "SELECT * FROM public.segs_rsample") %>%  names() %>% paste(collapse = ", ")
-  # mmsi, date, 
-  #   speed_bin_num, seg_id, 
-  #   avg_speed_knots, avg_implied_speed_knots, avg_calculated_knots, avg_speed_knots_1, avg_speed_knots_final, 
-  #   total_distance_nm, 
-  #   seg_min, unix_beg, unix_end, 
-  #   timestamp_beg, timestamp_end, npts, 
-  #   geom_txt, geom, geom_s1km
-  
-  #geojson <- here("data/tmp_segs_rsample_s1km_limit3.geojson")
+
   paste(
     '{
     "type": "FeatureCollection","name": "WhaleSafe_API_segs","crs": 

@@ -2,6 +2,14 @@ import pandas as pd
 from google.cloud  import bigquery
 from google.oauth2 import service_account
 from sqlalchemy    import create_engine
+from datetime import date, datetime, timedelta, timezone
+from dateutil.relativedelta import relativedelta, tz
+import time
+import sys
+
+def msg(txt):
+  print(txt + " ~ " + str(datetime.now()))
+  sys.stdout.flush()
 
 # bigquery connection
 project_id       = 'benioff-ocean-initiative'
@@ -9,70 +17,71 @@ credentials_json = '/home/admin/Benioff Ocean Initiative-454f666d1896.json'
 credentials      = service_account.Credentials.from_service_account_file(credentials_json)
 bq_client        = bigquery.Client(credentials=credentials, project=project_id)
 
-# bq to df
-sql = """
-  SELECT * EXCEPT (geom), ST_ASTEXT(geom) AS geom_txt 
-  FROM 
-  `benioff-ocean-initiative.test.r_copy_cat_sample` 
-  WHERE date > "2019-01-01";"""
-df = bq_client.query(sql).to_dataframe()
-print(df.info(memory_usage='deep'))
-df
-# PROBLEM: seeing mixed geometries: multipoint, point, linestring 
-#           mmsi  ...                                           geom_txt
-# 0    367104060  ...  MULTIPOINT(-118.270773333333 33.7350133333333,...
-# 1    367104060  ...          POINT(-118.270666666667 33.7348533333333)
-# 2    367104060  ...          POINT(-118.116906666667 33.5637066666667)
-# 3    367104060  ...  MULTIPOINT(-118.270773333333 33.7350133333333,...
-# 4    367104060  ...  MULTIPOINT(-118.270773333333 33.7350133333333,...
-# ..         ...  ...                                                ...
-# 481  303031000  ...  LINESTRING(-119.9471666667 33.7475833333, -119...
-# 482  303031000  ...  LINESTRING(-119.958773333333 33.7483733333333,...
-# 483  303031000  ...  LINESTRING(-119.973226666667 33.7493333333333,...
-# 484  303031000  ...  LINESTRING(-119.9926833333 33.7507666667, -120...
-# 485  303031000  ...  LINESTRING(-120.76585 33.8714, -120.7789866666...
-
 # postgres connection
 with open('/home/admin/ws_admin_pass.txt') as f:
     passwd = f.read().splitlines()[0]  
 pg_engine = create_engine('postgresql+psycopg2://admin:' + passwd + '@ws-postgis:5432/gis')
 pg_con    = pg_engine.connect()
 
-# write to postgres
-pg_con.execute("DROP TABLE segs_rsample")
-df.to_sql('segs_rsample', con=pg_engine, schema='public', if_exists='replace', index=False)
+def bq2pg(date_beg, date_end, replace_segs = False):
+  # i_date   = 0
+  # date_beg = '2017-01-01'
+  # date_end = '2017-02-01'
+  
+  sql_date = f"date >= '{date_beg}' AND date < '{date_end}'"
+  sql = f"""
+    SELECT * EXCEPT (geom), ST_ASTEXT(geom) AS geom_txt 
+    FROM 
+    `benioff-ocean-initiative.whalesafe.gfw_segments_agg`
+    WHERE {sql_date};
+    """
+  
+  df = bq_client.query(sql).to_dataframe()
+  # print(df.info(memory_usage='deep'))
+  # df
+  
+  # write to postgres
+  if replace_segs:
+    pg_con.execute('DROP TABLE segs')
+    df.to_sql('segs', con=pg_engine, schema='public', if_exists='replace', index=False)
+    pg_con.execute("ALTER TABLE public.segs ADD COLUMN geom geometry(GEOMETRY,4326);")
+    # Note: using geometry(4326) vs geography() since ST_Simplify only works on geometries for now
+    #   https://postgis.net/workshops/postgis-intro/geography.html
+    #   [#3377 (ST_Simplify for geography) – PostGIS](https://trac.osgeo.org/postgis/ticket/3377)
+  else:
+    df.to_sql('segs', con=pg_engine, schema='public', if_exists='append', index=False)
+    
+  # TODO: log dates done in BQ
 
-# create geom from geom_txt
-sql = """
-  ALTER TABLE public.segs_rsample ADD COLUMN geom geometry(GEOMETRY,4326);
-  UPDATE public.segs_rsample SET geom = ST_GeomFromText(geom_txt,4326);"""
-pg_con.execute(sql)
+def pg_simplify():
+  
+  # update geometry for all
+  pg_con.execute(
+    """
+    UPDATE public.segs 
+    SET geom = ST_GeomFromText(geom_txt,4326)
+    WHERE geom IS NULL;
+    """)
+  
+  # simplify segments
+  #   EPSG:6423 https://epsg.io/6423 NAD83(2011) / California zone 5; in meters
+  sql = """
+    ALTER TABLE public.segs
+      ADD COLUMN IF NOT EXISTS geom_s1km geometry(LINESTRING, 4326);
+    UPDATE public.segs
+     SET geom_s1km = ST_Transform(ST_Simplify(ST_Transform(geom, 6423), 1000), 4326)
+     WHERE 
+        ST_GeometryType(geom) = 'ST_LineString' AND
+        geom_s1km IS NULL;
+    """
+  pg_con.execute(sql)
 
-# variety of geometries
-# df_geoms = pg_con.execute("""
-#   SELECT ST_GeometryType(geom) geom_type, COUNT(*) AS n 
-#   FROM segs_rsample GROUP BY ST_GeometryType(geom)""")
-# df_geoms.fetchall()
-# [('ST_Point', 6), ('ST_MultiPoint', 7), 
-#  ('ST_MultiLineString', 16), ('ST_LineString', 455), 
-#  ('ST_GeometryCollection', 2)]
-
-# simplify segments
-#   EPSG:6423 https://epsg.io/6423 NAD83(2011) / California zone 5; in meters
-sql = """
-  ALTER TABLE public.segs_rsample 
-    ADD COLUMN IF NOT EXISTS geom_s1km geometry(LINESTRING, 4326);
-  UPDATE public.segs_rsample 
-   SET geom_s1km = ST_Transform(ST_Simplify(ST_Transform(geom, 6423), 1000), 4326)
-   WHERE ST_GeometryType(geom) = 'ST_LineString';
-  """
-pg_con.execute(sql)
-
-
-# create function for [GeoJSON Features from PostGIS · Paul Ramsey](http://blog.cleverelephant.ca/2019/03/geojson.html)
-# TODO: consider level of precision for lon/lat
-#    ST_AsGeoJSON(geometry geom, integer maxdecimaldigits=9, integer options=8);
-sql = """
+def create_pg_function_for_geojson_features():
+  # run once only
+  # create function for [GeoJSON Features from PostGIS · Paul Ramsey](http://blog.cleverelephant.ca/2019/03/geojson.html)
+  # TODO: consider level of precision for lon/lat
+  #    ST_AsGeoJSON(geometry geom, integer maxdecimaldigits=9, integer options=8);
+  sql = """
   CREATE OR REPLACE FUNCTION rowjsonb_to_geojson(
     rowjsonb JSONB, 
     geom_column TEXT DEFAULT 'geom')
@@ -94,10 +103,65 @@ sql = """
   END; 
   $$ 
   LANGUAGE 'plpgsql' IMMUTABLE STRICT;
-"""
-pg_con.execute(sql)
-# ERROR: TypeError: 'dict' object does not support indexing
-# So executed sql in Terminal of rstudio.whalesafe.net after logging into db like so:
-#   sudo apt-get update
-#   sudo apt-get install postgresql-client
-#   psql -h ws-postgis -U admin -W gis
+  """
+  #pg_con.execute(sql)
+  # ERROR: TypeError: 'dict' object does not support indexing
+  # So executed sql in Terminal of rstudio.whalesafe.net after logging into db like so:
+  #   sudo apt-get update
+  #   sudo apt-get install postgresql-client
+  #   psql -h ws-postgis -U admin -W gis
+
+def months_iter(startDate, endDate):
+    currentDate = startDate
+    while currentDate < endDate:
+        yield currentDate
+        currentDate = currentDate + relativedelta(months=+1)
+
+def load_all_by_month():
+    
+  # get date range
+  # SELECT min(date), max(date) FROM whalesafe.gfw_segments_agg WHERE date > '1990-01-01';
+  # 2017-01-01 2020-06-04
+  
+  months = [m for m in months_iter(date(2017, 1,1), date.today())]
+  msg("START load_all_by_month() for " + str(len(months)) + " months")
+  time_beg = datetime.now()
+  
+  for i_date, date_beg in enumerate(months_iter(date(2017, 1,1), date.today())):
+    msg(str(i_date) + ": " + str(date_beg))
+    
+    # i_date = 10
+    # date_beg = date(2017, 1,1)
+    date_end = date_beg + relativedelta(months=+1)
+    
+    date_beg = str(date_beg)
+    date_end = str(date_end)
+    
+    t0 = time.time()
+    
+    if (i_date == 0):
+      bq2pg(date_beg, date_end, replace_segs = True)
+    else:
+      bq2pg(date_beg, date_end)
+    
+    secs = time.time() - t0
+    t_done = t_now + (len(months) - i_date) * ((datetime.now() - time_beg) / i_date)
+    t_done = t_done.replace(tzinfo=tz.gettz('UTC')).astimezone(tz.gettz('America/Los_Angeles'))
+    msg('  ' + ('%0.2f' % secs) + ' seconds; expected completion: ' + str(t_done))
+  msg("Finished loading months! Simplifying...")
+  pg_simplify()
+  msg('FINISHED!)
+
+msg("__main__")
+if __name__ == "__main__":
+  msg("load_all_by_month()")
+  load_all_by_month() # 30 min for 2017-01-01 to 2020-06-04
+  # sudo su - root
+  # py=/home/admin/.local/share/r-miniconda/envs/r-reticulate/bin/python; script_py=/home/admin/github/ws-api/bq2pg.py; out_txt=/home/admin/github/ws-api/bq2pg_out.txt
+  # py=/usr/bin/python3; script_py=/home/admin/github/ws-api/bq2pg.py; out_txt=/home/admin/github/ws-api/bq2pg_out.txt
+  # echo py:$py $script_py:$script_py out_txt:$out_txt
+  # $py $script_py >$out_txt 2>&1 &
+  # cat $out_txt
+  #print("test print()")
+  #msg("test msg()")
+  
