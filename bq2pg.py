@@ -3,12 +3,14 @@ from google.cloud  import bigquery
 from google.oauth2 import service_account
 from sqlalchemy    import create_engine
 from datetime import date, datetime, timedelta, timezone
-from dateutil.relativedelta import relativedelta, tz
+from dateutil.relativedelta import relativedelta
+from dateutil import tz
 import time
 import sys
 
 def msg(txt):
-  print(txt + " ~ " + str(datetime.now()))
+  #txt = '  158.208 seconds; expected completion: 2020-06-09 12:48:31.328176-07:00'
+  print(txt + " ~ " + str(datetime.now(tz.gettz('America/Los_Angeles'))))
   sys.stdout.flush()
 
 # bigquery connection
@@ -42,7 +44,7 @@ def bq2pg(date_beg, date_end, replace_segs = False):
   
   # write to postgres
   if replace_segs:
-    pg_con.execute('DROP TABLE segs')
+    pg_con.execute('DROP TABLE IF EXISTS segs')
     df.to_sql('segs', con=pg_engine, schema='public', if_exists='replace', index=False)
     pg_con.execute("""
       -- DROP INDEX idx_segs_date;
@@ -134,7 +136,7 @@ def load_all_by_month():
   
   months = [m for m in months_iter(date(2017, 1,1), date.today())]
   msg("START load_all_by_month() for " + str(len(months)) + " months")
-  time_beg = datetime.now()
+  t_beg = datetime.now(tz.gettz('America/Los_Angeles'))
   
   for i_date, date_beg in enumerate(months_iter(date(2017, 1,1), date.today())):
     msg(str(i_date) + ": " + str(date_beg))
@@ -146,20 +148,22 @@ def load_all_by_month():
     date_beg = str(date_beg)
     date_end = str(date_end)
     
-    t0 = time.time()
-    
+    t0 = datetime.now()
     if (i_date == 0):
       bq2pg(date_beg, date_end, replace_segs = True)
     else:
       bq2pg(date_beg, date_end)
+    t_secs = (datetime.now() - t0).microseconds / 1000
     
-    secs = time.time() - t0
-    t_done = t_now + (len(months) - i_date) * ((datetime.now() - time_beg) / i_date)
-    t_done = t_done.replace(tzinfo=tz.gettz('UTC')).astimezone(tz.gettz('America/Los_Angeles'))
-    msg('  ' + ('%0.2f' % secs) + ' seconds; expected completion: ' + str(t_done))
+    t_now = datetime.now(tz.gettz('America/Los_Angeles'))
+    i_togo         = len(months) - (i_date + 1)
+    t_elapsed_msec = (t_now - t_beg).microseconds
+    t_per_i_msec   = t_elapsed_msec / (i_date + 1)
+    t_finish       = t_now + timedelta(microseconds = i_togo *  t_per_i_msec)
+    msg('  ' + str(t_secs) + ' seconds; expected completion: ' + str(t_finish) + '; t_per_i_msec: ' + str(t_per_i_msec/1000) + ' seconds per i/' + str(len(months)))
   msg("Finished loading months! Simplifying...")
   pg_simplify()
-  msg('FINISHED!)
+  msg('FINISHED!')
 
 def load_tbl(bq_tbl, pg_tbl, fld_indexes = None):
   # bq_tbl = 'whalesafe_ais.operator_stats'; pg_tbl = 'operator_stats'; fld_indexes = ['operator','year']

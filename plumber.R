@@ -5,13 +5,12 @@ library(RPostgres)
 library(dplyr)
 library(readr)
 library(lubridate)
-library(memoise) # https://xiaolianglin.com/2018/12/05/Use-memoise-to-speed-up-your-R-plumber-API/
+library(stringr)
 
 passwd_txt <- "/home/admin/ws_admin_pass.txt"
 dir_cache  <- "/home/admin/api_cache"
 
 passwd <- readLines(passwd_txt)
-mcache <- memoise::cache_filesystem(dir_cache)
 
 # db connect ----
 con <- DBI::dbConnect(
@@ -27,12 +26,9 @@ con <- DBI::dbConnect(
 
 args2where <- function(..., args_numeric = NULL, where_pfx = T){
   args <- list(...)
-  #vars <- sys.call()
-  #vars <- lapply(vars[-1], as.character)
-  
-  #browser()
+
   w <- c()
-  for (var in names(args)){ # var = names(args)[2]
+  for (var in names(args)){
     val <- args[[var]]
     if (!is.null(val)){
       if (var %in% args_numeric){
@@ -64,14 +60,9 @@ sql2db <- function(sql, do_msg = T){
   if(do_msg){
     t_now <- now(tzone = "America/Los_Angeles") # %>% format("")
     fxn   <- deparse(sys.calls()[[sys.nframe()-1]])
-    msg   <- glue("{fxn} took {td} secs ~ {t_now} PDT\n  sql: {sql}", .trim = F)
+    fxn   <- paste(fxn, collapse = "") %>% str_replace("^(.*)\\((.*)$", "\\1()")
+    msg   <- glue("{fxn} dbGetQuery(con, sql) took {td} secs ~ {t_now} PDT\n  sql: {sql}", .trim = F)
     message(msg)
-    
-    # TODO: get parent of memoise'd function so instead of: 
-    #     `_f`(operator = operator, year = year)() took 0.03 secs ~ 2020-06-09 09:41:31 PDT
-    #        sql: SELECT * FROM ship_stats_monthly WHERE year = 2019 ORDER BY mmsi, year, month
-    #   get: 
-    #     get_ship_stats_monthly(...)
   }
   
   res
@@ -97,109 +88,36 @@ function(){
   readBin(csv_file, "raw", n=file.info(csv_file)$size)
 }
 
-get_operators <- function(operator = NULL, year = NULL){
-  where = c()
+get_operators <- function(...){
+
+  sql_where <- args2where(
+    ..., 
+    args_numeric = c("year"))
   
-  if (!is.null(operator))
-    where = c(where, glue("operator = '{operator}'"))
-          
-  if (!is.null(year))
-    where = c(where, glue("year = {year}"))
+  sql <- glue("SELECT * FROM operator_stats {sql_where} ORDER BY operator, year")
   
-  if (length(where) > 0){
-    where_sql = glue("WHERE {paste(where, collapse = ' AND ')}")
-  } else {
-    where_sql = ""
-  }
-  
-  sql <- glue("SELECT * FROM operator_stats {where_sql} ORDER BY operator, year")
-  
-  message(glue(
-    "{Sys.time()}: dbGetQuery() begin
-          sql:{sql}
-    "))
-  
-  dbGetQuery(con, sql)
+  sql2db(sql)
 }
-cache_get_operators <- memoise(get_operators, cache = mcache)
 #* return list of operators as JSON
 #* @param operator eg "Foss Maritime Co"
 #* @param year eg "2019"
 #* @get /operators
 function(operator = NULL, year = NULL){
-  # if(missing(operator)) operator = NULL
-  # if(missing(year))         year = NULL
-
-  cache_get_operators(operator, year)
-}
-
-get_ship_stats_monthly <- function(
-  operator=NULL, operator_code=NULL, 
-  mmsi=NULL, name_of_ship=NULL, 
-  shiptype=NULL, ship_category=NULL, 
-  year=NULL, month=NULL,
-  month_grade=NULL){
-
-  sql_where <- args2where(
-    operator      = operator, 
-    operator_code = operator_code, 
-    mmsi          = mmsi, 
-    name_of_ship  = name_of_ship, 
-    shiptype      = shiptype, 
-    ship_category = ship_category, 
-    year          = year, 
-    month         = month, 
-    month_grade   = month_grade, 
-    args_numeric = c("year","month"))
-
-  sql <- glue("SELECT * FROM ship_stats_monthly {sql_where} ORDER BY mmsi, year, month")
-  
-  sql2db(sql)
-}
-cache_get_ship_stats_monthly <- memoise(get_ship_stats_monthly, cache = mcache)
-#* return monthly ship stats as JSON
-#* @param operator
-#* @param operator_code
-#* @param mmsi
-#* @param name_of_ship
-#* @param shiptype
-#* @param ship_category
-#* @param year
-#* @param month
-#* @param month_grade
-#* @param year eg "2019"
-#* @get /ship_stats_monthly
-function(
-  operator=NULL, operator_code=NULL, 
-  mmsi=NULL, name_of_ship=NULL, 
-  shiptype=NULL, ship_category=NULL, 
-  year=NULL, month=NULL,
-  month_grade=NULL){
-  
-  cache_get_ship_stats_monthly(
-    operator      = operator, 
-    operator_code = operator_code, 
-    mmsi          = mmsi, 
-    name_of_ship  = name_of_ship, 
-    shiptype      = shiptype, 
-    ship_category = ship_category, 
-    year          = year, 
-    month         = month, 
-    month_grade   = month_grade)
-}
-
-get_ship_stats_annual <- function(operator = NULL, year = NULL){
-  
-  sql_where <- args2where(
+  get_operators(
     operator = operator, 
-    year     = year, 
-    args_numeric = c("year"))
-  
+    year     = year)
+}
+
+get_ship_stats_monthly <- function(...){
+
+  sql_where <- args2where(
+    ...,
+    args_numeric = c("mmsi","operator_code","year","month"))
+
   sql <- glue("SELECT * FROM ship_stats_monthly {sql_where} ORDER BY mmsi, year, month")
   
   sql2db(sql)
 }
-cache_get_ship_stats_monthly <- memoise(get_ship_stats_monthly, cache = mcache)
 #* return monthly ship stats as JSON
 #* @param operator
 #* @param operator_code
@@ -210,7 +128,6 @@ cache_get_ship_stats_monthly <- memoise(get_ship_stats_monthly, cache = mcache)
 #* @param year
 #* @param month
 #* @param month_grade
-#* @param year eg "2019"
 #* @get /ship_stats_monthly
 function(
   operator=NULL, operator_code=NULL, 
@@ -219,7 +136,47 @@ function(
   year=NULL, month=NULL,
   month_grade=NULL){
   
-  cache_get_ship_stats_monthly(
+  get_ship_stats_monthly(
+    operator      = operator,
+    operator_code = operator_code,
+    mmsi          = mmsi,
+    name_of_ship  = name_of_ship,
+    shiptype      = shiptype,
+    ship_category = ship_category,
+    year          = year,
+    month         = month,
+    month_grade   = month_grade)
+
+}
+
+get_ship_stats_annual <- function(...){
+  
+  sql_where <- args2where(
+    ..., 
+    args_numeric = c("mmsi","operator_code","year"))
+  
+  sql <- glue("SELECT * FROM ship_stats_annual {sql_where} ORDER BY mmsi, year")
+  
+  sql2db(sql)
+}
+#* return annual ship stats as JSON
+#* @param operator
+#* @param operator_code
+#* @param mmsi
+#* @param name_of_ship
+#* @param shiptype
+#* @param ship_category
+#* @param year
+#* @param cooperation_score
+#* @get /ship_stats_annual
+function(
+  operator=NULL, operator_code=NULL, 
+  mmsi=NULL, name_of_ship=NULL, 
+  shiptype=NULL, ship_category=NULL, 
+  year=NULL, 
+  cooperation_score=NULL){
+  
+  get_ship_stats_annual(
     operator      = operator, 
     operator_code = operator_code, 
     mmsi          = mmsi, 
@@ -227,14 +184,10 @@ function(
     shiptype      = shiptype, 
     ship_category = ship_category, 
     year          = year, 
-    month         = month, 
-    month_grade   = month_grade)
+    cooperation_score = cooperation_score)
 }
 
-
-# TODO: @get /ships_stats_annual
-
-#* return table of ships as CSV
+#* return table of ships (ship_stats_annual) as CSV
 #* @serializer contentType list(type="text/csv")
 #* @get /ships_csv
 function(){
@@ -256,7 +209,6 @@ function(){
 
   readBin(csv_file, "raw", n=file.info(csv_file)$size)
 }
-
 
 get_ship_segments <- function(date_beg = NULL, date_end = NULL, bbox = NULL, mmsi = NULL, simplify = NULL){
   # sql fields ----
@@ -327,7 +279,6 @@ get_ship_segments <- function(date_beg = NULL, date_end = NULL, bbox = NULL, mms
     "]}") 
   
 }
-cache_get_ship_segments <- memoise(get_ship_segments, cache = mcache)
 #* return GeoJSON of ship segments
 #* @param date_beg begin date, in format YYYY-mm-dd, eg 2019-10-01
 #* @param date_end end date, in format YYYY-mm-dd, eg 2019-10-07
@@ -343,7 +294,7 @@ function(date_beg = NULL, date_end = NULL, bbox = NULL, mmsi = NULL, simplify = 
   # if(missing(mmsi))         mmsi = NULL
   # if(missing(simplify)) simplify = NULL
   
-  cache_get_ship_segments(date_beg, date_end, bbox, mmsi, simplify)
+  get_ship_segments(date_beg, date_end, bbox, mmsi, simplify)
 }
 
 #* redirect to the swagger interface 
