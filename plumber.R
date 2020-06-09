@@ -2,17 +2,18 @@ library(here)
 library(glue)
 library(DBI)
 library(RPostgres)
-#library(dplyr)
-#library(readr)
-#library(sf)
-#library(geojsonsf)
-#library(jsonlite)
-# library(leaflet)
-# library(mapview)
+library(dplyr)
+library(readr)
+library(lubridate)
+library(memoise) # https://xiaolianglin.com/2018/12/05/Use-memoise-to-speed-up-your-R-plumber-API/
 
-passwd <- readLines("/home/admin/ws_admin_pass.txt")
+passwd_txt <- "/home/admin/ws_admin_pass.txt"
+dir_cache  <- "/home/admin/api_cache"
 
-# connection to database
+passwd <- readLines(passwd_txt)
+mcache <- memoise::cache_filesystem(dir_cache)
+
+# db connect ----
 con <- DBI::dbConnect(
   RPostgres::Postgres(),
   dbname   = "gis",
@@ -20,52 +21,60 @@ con <- DBI::dbConnect(
   port     = 5432,
   user     = "admin",
   password = passwd)
-
 # dbListTables(con)  
 
-#* page through operators as JSON
-#* @param sort_by field to sort by; default = operator
-#* @param n_perpage number of rows per page of results; default = 20
-#* @param page page of results; default = 1
-#* @get /operators_page
-function(sort_by="operator", n_perpage = 20, page = 1){
-  # sort_by = "operator"; n_perpage = "20"; page = "1"
+# helper functions ----
+
+args2where <- function(..., args_numeric = NULL, where_pfx = T){
+  args <- list(...)
+  #vars <- sys.call()
+  #vars <- lapply(vars[-1], as.character)
   
-  n_perpage <- as.integer(n_perpage)
-  page      <- as.integer(page)
+  #browser()
+  w <- c()
+  for (var in names(args)){ # var = names(args)[2]
+    val <- args[[var]]
+    if (!is.null(val)){
+      if (var %in% args_numeric){
+        var_w <- glue("{var} = {val}")
+      } else {
+        var_w <- glue("{var} = '{val}'")
+      }
+      w <- c(w, var_w)
+    }
+  }
+  if (length(w) > 0)
+    w <- paste(w, collapse = ' AND ')
   
-  # eg page 2: 21 to 30
-  n_beg = (page - 1) * n_perpage + 1
-  n_end = n_beg + n_perpage - 1
+  if (where_pfx & length(w) > 0)
+    w <- paste("WHERE", w)
   
-  operators <- tbl(con, "operator_stats")
+  if (length(w) == 0)
+    w <- ""
   
-  d <- operators %>% 
-    #arrange(!!sort_by) %>% 
-    mutate(
-      row_n = row_number()) %>% 
-    filter(
-      row_n >= !!n_beg,
-      row_n <= !!n_end) %>% 
-    select(operator, 
-           grade, 
-           `compliance score (reported speed)`, 
-           `total distance (km)`, 
-           `total distance (nautcal miles)`, 
-           `distance (nautcal miles) under 10 knots`, 
-           `distance (nautcal miles) over 10 knots`) %>% 
-    collect()
+  w
+}
+
+sql2db <- function(sql, do_msg = T){
   
-  n_records <- operators %>% 
-    summarize(n = n()) %>% 
-    collect() %>% 
-    pull(n)
-  n_pages <- n_records %/% n_perpage + 
-    ifelse(n_records %% n_perpage > 0, 1, 0)
-  attr(d, "n_records") <- n_records
-  attr(d, "n_pages")   <- n_pages
+  t0 <- now()
+  res <- dbGetQuery(con, sql)
+  td <- (now() - t0) %>% as.numeric() %>% round(digits=2)
   
-  d
+  if(do_msg){
+    t_now <- now(tzone = "America/Los_Angeles") # %>% format("")
+    fxn   <- deparse(sys.calls()[[sys.nframe()-1]])
+    msg   <- glue("{fxn} took {td} secs ~ {t_now} PDT\n  sql: {sql}", .trim = F)
+    message(msg)
+    
+    # TODO: get parent of memoise'd function so instead of: 
+    #     `_f`(operator = operator, year = year)() took 0.03 secs ~ 2020-06-09 09:41:31 PDT
+    #        sql: SELECT * FROM ship_stats_monthly WHERE year = 2019 ORDER BY mmsi, year, month
+    #   get: 
+    #     get_ship_stats_monthly(...)
+  }
+  
+  res
 }
 
 #* return table of operators as CSV
@@ -88,87 +97,142 @@ function(){
   readBin(csv_file, "raw", n=file.info(csv_file)$size)
 }
 
+get_operators <- function(operator = NULL, year = NULL){
+  where = c()
+  
+  if (!is.null(operator))
+    where = c(where, glue("operator = '{operator}'"))
+          
+  if (!is.null(year))
+    where = c(where, glue("year = {year}"))
+  
+  if (length(where) > 0){
+    where_sql = glue("WHERE {paste(where, collapse = ' AND ')}")
+  } else {
+    where_sql = ""
+  }
+  
+  sql <- glue("SELECT * FROM operator_stats {where_sql} ORDER BY operator, year")
+  
+  message(glue(
+    "{Sys.time()}: dbGetQuery() begin
+          sql:{sql}
+    "))
+  
+  dbGetQuery(con, sql)
+}
+cache_get_operators <- memoise(get_operators, cache = mcache)
 #* return list of operators as JSON
+#* @param operator eg "Foss Maritime Co"
+#* @param year eg "2019"
 #* @get /operators
-function(){
-  
-  sql <- glue(
-  "SELECT 
-operator,
-year,
-year_coop_score,
-year_ship_count,
-CASE 
-  WHEN ((total_distance_km_under_10/total_distance_km) * 100) >= 99
-  THEN 'A+'
-  WHEN ((total_distance_km_under_10/total_distance_km) * 100) < 99 
-  AND ((total_distance_km_under_10/total_distance_km) * 100) >= 90
-  THEN 'A'
-  WHEN ((total_distance_km_under_10/total_distance_km) * 100) < 90 
-  AND ((total_distance_km_under_10/total_distance_km) * 100) >= 80
-  THEN 'B'
-  WHEN ((total_distance_km_under_10/total_distance_km) * 100) < 80 
-  AND ((total_distance_km_under_10/total_distance_km) * 100) >= 70
-  THEN 'C'
-  WHEN ((total_distance_km_under_10/total_distance_km) * 100) < 70 
-  AND ((total_distance_km_under_10/total_distance_km) * 100) >= 60
-  THEN 'D'
-  ELSE 'F'
-  END AS grade,
-  total_distance_km,
-total_distance_km_under_10,
-total_distance_km_btwn_10_12,
-total_distance_km_btwn_12_15,
-total_distance_km_over_15,
-  avg_speed_knots,
-  mmsi_list
-FROM(
-SELECT
-    operator, 
-    year, 
-    ROUND(AVG(coop_score),2) AS year_coop_score, 
-    COUNT(distinct(mmsi)) AS year_ship_count,
-    SUM( total_distance_km ) AS total_distance_km,
-    SUM( total_distance_km_under_10 ) AS total_distance_km_under_10 ,
-    SUM( total_distance_km_btwn_10_12 ) AS total_distance_km_btwn_10_12 ,
-    SUM( total_distance_km_btwn_12_15 ) AS total_distance_km_btwn_12_15 ,
-    SUM( total_distance_km_over_15 ) AS total_distance_km_over_15 ,
-    SUM( avg_speed_knots ) AS avg_speed_knots,
-    STRING_AGG(CAST(mmsi AS STRING), ', ') AS mmsi_list,
-    #STRING_AGG(DISTINCT(shiptype), ', ') AS ship_types
-  FROM 
-    `benioff-ocean-initiative.whalesafe_ais.mmsi_cooperation_stats`
-  GROUP BY operator, year
-  ORDER BY year_coop_score DESC);")
-  
-  message(glue(
-    "{Sys.time()}: dbGetQuery() begin
-          sql:{sql}
-    
-    "))
-  
-  operator_stats <- dbGetQuery(con, sql)
+function(operator = NULL, year = NULL){
+  # if(missing(operator)) operator = NULL
+  # if(missing(year))         year = NULL
+
+  cache_get_operators(operator, year)
 }
 
-#* return mmsi stats table as JSON
-#* @get /mmsi_cooperation_stats
-function(){
+get_ship_stats_monthly <- function(
+  operator=NULL, operator_code=NULL, 
+  mmsi=NULL, name_of_ship=NULL, 
+  shiptype=NULL, ship_category=NULL, 
+  year=NULL, month=NULL,
+  month_grade=NULL){
+
+  sql_where <- args2where(
+    operator      = operator, 
+    operator_code = operator_code, 
+    mmsi          = mmsi, 
+    name_of_ship  = name_of_ship, 
+    shiptype      = shiptype, 
+    ship_category = ship_category, 
+    year          = year, 
+    month         = month, 
+    month_grade   = month_grade, 
+    args_numeric = c("year","month"))
+
+  sql <- glue("SELECT * FROM ship_stats_monthly {sql_where} ORDER BY mmsi, year, month")
   
-  sql <- glue(
-    "SELECT * 
-    FROM 
-    `benioff-ocean-initiative.whalesafe_ais.mmsi_cooperation_stats`;")
+  sql2db(sql)
+}
+cache_get_ship_stats_monthly <- memoise(get_ship_stats_monthly, cache = mcache)
+#* return monthly ship stats as JSON
+#* @param operator
+#* @param operator_code
+#* @param mmsi
+#* @param name_of_ship
+#* @param shiptype
+#* @param ship_category
+#* @param year
+#* @param month
+#* @param month_grade
+#* @param year eg "2019"
+#* @get /ship_stats_monthly
+function(
+  operator=NULL, operator_code=NULL, 
+  mmsi=NULL, name_of_ship=NULL, 
+  shiptype=NULL, ship_category=NULL, 
+  year=NULL, month=NULL,
+  month_grade=NULL){
   
-  message(glue(
-    "{Sys.time()}: dbGetQuery() begin
-          sql:{sql}
-    
-    "))
-  
-  stats <- dbGetQuery(con, sql)
+  cache_get_ship_stats_monthly(
+    operator      = operator, 
+    operator_code = operator_code, 
+    mmsi          = mmsi, 
+    name_of_ship  = name_of_ship, 
+    shiptype      = shiptype, 
+    ship_category = ship_category, 
+    year          = year, 
+    month         = month, 
+    month_grade   = month_grade)
 }
 
-# TODO: @get /ships_by_operator
+get_ship_stats_annual <- function(operator = NULL, year = NULL){
+  
+  sql_where <- args2where(
+    operator = operator, 
+    year     = year, 
+    args_numeric = c("year"))
+  
+  sql <- glue("SELECT * FROM ship_stats_monthly {sql_where} ORDER BY mmsi, year, month")
+  
+  sql2db(sql)
+}
+cache_get_ship_stats_monthly <- memoise(get_ship_stats_monthly, cache = mcache)
+#* return monthly ship stats as JSON
+#* @param operator
+#* @param operator_code
+#* @param mmsi
+#* @param name_of_ship
+#* @param shiptype
+#* @param ship_category
+#* @param year
+#* @param month
+#* @param month_grade
+#* @param year eg "2019"
+#* @get /ship_stats_monthly
+function(
+  operator=NULL, operator_code=NULL, 
+  mmsi=NULL, name_of_ship=NULL, 
+  shiptype=NULL, ship_category=NULL, 
+  year=NULL, month=NULL,
+  month_grade=NULL){
+  
+  cache_get_ship_stats_monthly(
+    operator      = operator, 
+    operator_code = operator_code, 
+    mmsi          = mmsi, 
+    name_of_ship  = name_of_ship, 
+    shiptype      = shiptype, 
+    ship_category = ship_category, 
+    year          = year, 
+    month         = month, 
+    month_grade   = month_grade)
+}
+
+
+# TODO: @get /ships_stats_annual
 
 #* return table of ships as CSV
 #* @serializer contentType list(type="text/csv")
@@ -178,7 +242,7 @@ function(){
 
   on.exit(unlink(csv_file), add = TRUE)
 
-  d <- tbl(con, "ship_stats_2019") %>% 
+  d <- tbl(con, "ship_stats_annual") %>% 
     collect()
 
   message(glue(
@@ -193,17 +257,8 @@ function(){
   readBin(csv_file, "raw", n=file.info(csv_file)$size)
 }
 
-#* return GeoJSON of ship segments
-#* @param mmsi AIS ship ID, eg 248896000
-#* @param date_beg begin date, in format YYYY-mm-dd, eg 2019-10-01
-#* @param date_end end date, in format YYYY-mm-dd, eg 2019-10-07
-#* @param bbox bounding box in decimal degrees: lon_min,lat_min,lon_max,lat_max
-#* @param simplify simplification specifying tolerance (pre-rendered): 1km
-#* @serializer contentType list(type="application/json")
-#* @get /ship_segments
-function(bbox = NULL, date_end = NULL, date_beg = NULL, mmsi = NULL, simplify = NULL){
-  # mmsi = 477136800
-  
+
+get_ship_segments <- function(date_beg = NULL, date_end = NULL, bbox = NULL, mmsi = NULL, simplify = NULL){
   # sql fields ----
   if (!is.null(simplify)){
     stopifnot(simplify %in% c("1km"))
@@ -230,15 +285,15 @@ function(bbox = NULL, date_end = NULL, date_beg = NULL, mmsi = NULL, simplify = 
   
   if (!is.null(date_end))
     where <- c(where, glue("date <= '{date_end}'"))
-
+  
   # sql where bbox ----
   # bounding box in decimal degrees: lon_min,lat_min,lon_max,lat_max
   if (!is.null(bbox)){
-
+    
     b <- strsplit(bbox, ",")[[1]] %>% as.numeric()
     x1 <- b[1]; y1 <- b[2]; x2 <- b[3]; y2 <- b[4]
     sql_bbox <- glue("ST_Intersects({fld_geom}, 'SRID=4326;POLYGON(({x2} {y1}, {x2} {y2}, {x1} {y2}, {x1} {y1}, {x2} {y1}))')")
-  
+    
     where <- c(where, sql_bbox)
   }
   
@@ -247,7 +302,7 @@ function(bbox = NULL, date_end = NULL, date_beg = NULL, mmsi = NULL, simplify = 
   } else {
     sql_where <- ""
   }
-
+  
   #[GeoJSON Features from PostGIS · Paul Ramsey](http://blog.cleverelephant.ca/2019/03/geojson.html)
   sql <- glue(
     "SELECT rowjsonb_to_geojson(to_jsonb(tbl.*)) AS txt
@@ -262,7 +317,7 @@ function(bbox = NULL, date_end = NULL, date_beg = NULL, mmsi = NULL, simplify = 
           sql:{sql}
     "))
   res <- dbGetQuery(con, sql)
-
+  
   paste(
     '{
     "type": "FeatureCollection","name": "WhaleSafe_API_segs","crs": 
@@ -270,6 +325,25 @@ function(bbox = NULL, date_end = NULL, date_beg = NULL, mmsi = NULL, simplify = 
     "features": [',
     paste(res$txt, collapse = ",\n"),
     "]}") 
+  
+}
+cache_get_ship_segments <- memoise(get_ship_segments, cache = mcache)
+#* return GeoJSON of ship segments
+#* @param date_beg begin date, in format YYYY-mm-dd, eg 2019-10-01
+#* @param date_end end date, in format YYYY-mm-dd, eg 2019-10-07
+#* @param bbox bounding box in decimal degrees: lon_min,lat_min,lon_max,lat_max
+#* @param mmsi AIS ship ID, eg 248896000
+#* @param simplify simplification specifying tolerance (pre-rendered): 1km
+#* @serializer contentType list(type="application/json")
+#* @get /ship_segments
+function(date_beg = NULL, date_end = NULL, bbox = NULL, mmsi = NULL, simplify = NULL){
+  # if(missing(date_beg)) date_beg = NULL
+  # if(missing(date_end)) date_end = NULL
+  # if(missing(bbox))         bbox = NULL
+  # if(missing(mmsi))         mmsi = NULL
+  # if(missing(simplify)) simplify = NULL
+  
+  cache_get_ship_segments(date_beg, date_end, bbox, mmsi, simplify)
 }
 
 #* redirect to the swagger interface 

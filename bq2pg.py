@@ -44,7 +44,15 @@ def bq2pg(date_beg, date_end, replace_segs = False):
   if replace_segs:
     pg_con.execute('DROP TABLE segs')
     df.to_sql('segs', con=pg_engine, schema='public', if_exists='replace', index=False)
-    pg_con.execute("ALTER TABLE public.segs ADD COLUMN geom geometry(GEOMETRY,4326);")
+    pg_con.execute("""
+      -- DROP INDEX idx_segs_date;
+      CREATE INDEX idx_segs_date ON public.segs (date DESC NULLS LAST);
+      CLUSTER public.segs USING idx_segs_date;
+      ANALYZE public.segs;
+
+      ALTER TABLE public.segs ADD COLUMN geom geometry(GEOMETRY,4326);
+      CREATE INDEX idx_segs_geom ON public.segs USING GIST (geom);
+      """)
     # Note: using geometry(4326) vs geography() since ST_Simplify only works on geometries for now
     #   https://postgis.net/workshops/postgis-intro/geography.html
     #   [#3377 (ST_Simplify for geography) – PostGIS](https://trac.osgeo.org/postgis/ticket/3377)
@@ -73,6 +81,7 @@ def pg_simplify():
      WHERE 
         ST_GeometryType(geom) = 'ST_LineString' AND
         geom_s1km IS NULL;
+    CREATE INDEX idx_segs_geom_s1km ON public.segs USING GIST (geom_s1km);
     """
   pg_con.execute(sql)
 
@@ -151,6 +160,23 @@ def load_all_by_month():
   msg("Finished loading months! Simplifying...")
   pg_simplify()
   msg('FINISHED!)
+
+def load_tbl(bq_tbl, pg_tbl, fld_indexes = None):
+  # bq_tbl = 'whalesafe_ais.operator_stats'; pg_tbl = 'operator_stats'; fld_indexes = ['operator','year']
+  df = bq_client.query("SELECT * FROM " + bq_tbl).to_dataframe()
+  pg_con.execute('DROP TABLE IF EXISTS segs')
+  df.to_sql(pg_tbl, con=pg_engine, schema='public', if_exists='replace', index=False)
+  for fld in fld_indexes:
+    sql = "CREATE INDEX idx_{pg_tbl}_{fld} ON {pg_tbl} ({fld})".format(pg_tbl=pg_tbl, fld=fld)
+    print(sql)
+    pg_con.execute(sql)
+
+def load_nonspatial():
+  load_tbl('whalesafe_ais.mmsi_cooperation_stats', 'ship_stats_annual')
+  load_tbl('whalesafe_ais.ship_stats'            , 'ship_stats_monthly')
+  load_tbl('whalesafe_ais.operator_stats'        , 'operator_stats'    , fld_indexes = ['operator','year'])
+
+  # operator_stats
 
 msg("__main__")
 if __name__ == "__main__":

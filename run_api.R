@@ -16,11 +16,11 @@ plumber$new(plumber_r)$run(port=8888, host="0.0.0.0", swagger = T)
 # open in web browser: http://api.ships4whales.org
 # for more, see https://www.rplumber.io/docs
 
-# To start on rstudio.ships4whales.org in Terminal:
-#   sudo su root
-#   Rscript /srv/ws-api/run_api.R &
-#   exit
-# To restart the process:
+# To stop on rstudio.whalesafe.net in Terminal:
 #   ps -eaf | grep ws-api
 #   # admin      494   442  0 Feb07 pts/0    00:00:08 /usr/local/lib/R/bin/exec/R --no-save --no-restore --slave --no-restore --file=/srv/ws-api/run_api.R
 #   sudo kill -9 494
+# To start on rstudio.whalesafe.net in Terminal:
+#   sudo su root
+#   Rscript /srv/ws-api/run_api.R &
+#   exit
