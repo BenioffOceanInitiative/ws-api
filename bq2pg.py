@@ -25,7 +25,7 @@ with open('/home/admin/ws_admin_pass.txt') as f:
 pg_engine = create_engine('postgresql+psycopg2://admin:' + passwd + '@ws-postgis:5432/gis')
 pg_con    = pg_engine.connect()
 
-def bq2pg(date_beg, date_end, replace_segs = False):
+def bq2pg_segs(date_beg, date_end, replace_segs = False):
   # i_date   = 0
   # date_beg = '2017-01-01'
   # date_end = '2017-02-01'
@@ -37,6 +37,7 @@ def bq2pg(date_beg, date_end, replace_segs = False):
     `benioff-ocean-initiative.whalesafe.gfw_segments_agg`
     WHERE {sql_date};
     """
+  msg('  sql: ' + sql)
   
   df = bq_client.query(sql).to_dataframe()
   # print(df.info(memory_usage='deep'))
@@ -46,36 +47,39 @@ def bq2pg(date_beg, date_end, replace_segs = False):
   if replace_segs:
     pg_con.execute('DROP TABLE IF EXISTS segs')
     df.to_sql('segs', con=pg_engine, schema='public', if_exists='replace', index=False)
-    pg_con.execute("""
-      -- DROP INDEX idx_segs_date;
-      CREATE INDEX idx_segs_date ON public.segs (date DESC NULLS LAST);
-      CLUSTER public.segs USING idx_segs_date;
-      ANALYZE public.segs;
-
-      ALTER TABLE public.segs ADD COLUMN geom geometry(GEOMETRY,4326);
-      CREATE INDEX idx_segs_geom ON public.segs USING GIST (geom);
-      """)
-    # Note: using geometry(4326) vs geography() since ST_Simplify only works on geometries for now
-    #   https://postgis.net/workshops/postgis-intro/geography.html
-    #   [#3377 (ST_Simplify for geography) – PostGIS](https://trac.osgeo.org/postgis/ticket/3377)
   else:
     df.to_sql('segs', con=pg_engine, schema='public', if_exists='append', index=False)
     
   # TODO: log dates done in BQ
 
-def pg_simplify():
-  
-  # update geometry for all
-  pg_con.execute(
-    """
-    UPDATE public.segs 
-    SET geom = ST_GeomFromText(geom_txt,4326)
-    WHERE geom IS NULL;
-    """)
-  
-  # simplify segments
-  #   EPSG:6423 https://epsg.io/6423 NAD83(2011) / California zone 5; in meters
+def pg_spatialize_segs():
   sql = """
+    -- date: index and cluster
+    CREATE INDEX idx_segs_date ON public.segs (date DESC NULLS LAST);
+    CLUSTER public.segs USING idx_segs_date;
+    
+    -- geom: add, update, index
+    ALTER TABLE public.segs ADD COLUMN geom geometry(GEOMETRY,4326);
+    UPDATE public.segs 
+      SET geom = ST_GeomFromText(geom_txt,4326)
+      WHERE geom IS NULL;
+    CREATE INDEX idx_segs_geom ON public.segs USING GIST (geom);
+    
+    -- table: update indices, clusters
+    ANALYZE public.segs;
+    """
+  pg_con.execute(sql)
+
+def pg_simplify_segs():
+  # Note: using geometry(4326) vs geography() since ST_Simplify only works on geometries for now
+  #   https://postgis.net/workshops/postgis-intro/geography.html
+  #   [#3377 (ST_Simplify for geography) – PostGIS](https://trac.osgeo.org/postgis/ticket/3377)
+  #   simplify segments using crs EPSG:6423 https://epsg.io/6423 NAD83(2011) / California zone 5; in meters
+  
+  sql = """
+    UPDATE public.segs 
+      SET geom = ST_GeomFromText(geom_txt,4326)
+      WHERE geom IS NULL;
     ALTER TABLE public.segs
       ADD COLUMN IF NOT EXISTS geom_s1km geometry(LINESTRING, 4326);
     UPDATE public.segs
@@ -136,7 +140,9 @@ def load_all_by_month():
   
   months = [m for m in months_iter(date(2017, 1,1), date.today())]
   msg("START load_all_by_month() for " + str(len(months)) + " months")
-  t_beg = datetime.now(tz.gettz('America/Los_Angeles'))
+  
+  tz_pt = tz.gettz('America/Los_Angeles')
+  t_beg = datetime.now(tz_pt)
   
   for i_date, date_beg in enumerate(months_iter(date(2017, 1,1), date.today())):
     msg(str(i_date) + ": " + str(date_beg))
@@ -150,30 +156,35 @@ def load_all_by_month():
     
     t0 = datetime.now()
     if (i_date == 0):
-      bq2pg(date_beg, date_end, replace_segs = True)
+      bq2pg_segs(date_beg, date_end, replace_segs = True)
     else:
-      bq2pg(date_beg, date_end)
-    t_secs = (datetime.now() - t0).microseconds / 1000
+      bq2pg_segs(date_beg, date_end)
+    t_secs = (datetime.now() - t0).total_seconds()
     
-    t_now = datetime.now(tz.gettz('America/Los_Angeles'))
+    t_now          = datetime.now(tz_pt)
     i_togo         = len(months) - (i_date + 1)
-    t_elapsed_msec = (t_now - t_beg).microseconds
-    t_per_i_msec   = t_elapsed_msec / (i_date + 1)
-    t_finish       = t_now + timedelta(microseconds = i_togo *  t_per_i_msec)
-    msg('  ' + str(t_secs) + ' seconds; expected completion: ' + str(t_finish) + '; t_per_i_msec: ' + str(t_per_i_msec/1000) + ' seconds per i/' + str(len(months)))
-  msg("Finished loading months! Simplifying...")
-  pg_simplify()
-  msg('FINISHED!')
+    t_elapsed_sec  = (t_now - t_beg).total_seconds()
+    t_per_i_sec    = t_elapsed_sec / (i_date + 1)
+    t_finish       = t_now + timedelta(seconds = i_togo *  t_per_i_sec)
+    msg('  took ' + str(t_secs) + ' seconds; expected completion: ' + str(t_finish) + '; ' + str(t_per_i_sec) + ' seconds per i (n=' + str(len(months)) + ')')
 
 def load_tbl(bq_tbl, pg_tbl, fld_indexes = None):
   # bq_tbl = 'whalesafe_ais.operator_stats'; pg_tbl = 'operator_stats'; fld_indexes = ['operator','year']
   df = bq_client.query("SELECT * FROM " + bq_tbl).to_dataframe()
-  pg_con.execute('DROP TABLE IF EXISTS segs')
+  pg_con.execute('DROP TABLE IF EXISTS ' + pg_tbl)
   df.to_sql(pg_tbl, con=pg_engine, schema='public', if_exists='replace', index=False)
   for fld in fld_indexes:
     sql = "CREATE INDEX idx_{pg_tbl}_{fld} ON {pg_tbl} ({fld})".format(pg_tbl=pg_tbl, fld=fld)
     print(sql)
     pg_con.execute(sql)
+
+def vacuum_db():
+  pg_con.execute("VACUUM(FULL, ANALYZE, VERBOSE)")
+  # InternalError: (psycopg2.errors.ActiveSqlTransaction) VACUUM cannot run inside a transaction block
+  # So ran from rstudio.whalesafe.net Terminal:
+  #   admin:~$ psql -h ws-postgis -U admin -W gis
+  #   gis=# VACUUM(FULL, ANALYZE, VERBOSE);
+
 
 def load_nonspatial():
   load_tbl('whalesafe_ais.mmsi_cooperation_stats', 'ship_stats_annual')
@@ -186,6 +197,14 @@ msg("__main__")
 if __name__ == "__main__":
   msg("load_all_by_month()")
   load_all_by_month() # 30 min for 2017-01-01 to 2020-06-04
+  msg("pg_spatialize_segs()")
+  pg_spatialize_segs()
+  msg("pg_simplify_segs()")
+  pg_simplify_segs()
+  msg("vacuum_db()")
+  vacuum_db()
+  msg("FINISHED!")
+  
   # sudo su - root
   # py=/home/admin/.local/share/r-miniconda/envs/r-reticulate/bin/python; script_py=/home/admin/github/ws-api/bq2pg.py; out_txt=/home/admin/github/ws-api/bq2pg_out.txt
   # py=/usr/bin/python3; script_py=/home/admin/github/ws-api/bq2pg.py; out_txt=/home/admin/github/ws-api/bq2pg_out.txt

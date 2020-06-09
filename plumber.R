@@ -12,6 +12,33 @@ dir_cache  <- "/home/admin/api_cache"
 
 passwd <- readLines(passwd_txt)
 
+# TODO: consider gzip ----
+
+# https://github.com/rstudio/plumber/issues/103
+# #return compressed bin
+# x %>%  
+#   serialize(NULL)%>%  
+#   memCompress(type = 'gzip')  
+# #undo compress and serialize 
+# x <- GET(url) %>%    
+#   .$content %>%    
+#   memDecompress(type = 'gzip') %>%  
+#   unserialize()
+
+# https://community.rstudio.com/t/plumber-apis-timing-big-discrepancies-between-r-studio-connect-and-local-runs/29483/11
+# @post /predict
+# @serializer contentType list(type="gzip")
+# function(req, res) {
+#   
+#   # Function logic here
+#   
+#   json_file <- tempfile()
+#   gz_file <- paste0(json_file, ".gz")
+#   jsonlite::write_json(df_final, json_file)
+#   R.utils::gzip(json_file, gz_file)
+#   readBin(gz_file, "raw", n = file.info(gz_file)$size)
+# }
+
 # db connect ----
 con <- DBI::dbConnect(
   RPostgres::Postgres(),
@@ -288,12 +315,6 @@ get_ship_segments <- function(date_beg = NULL, date_end = NULL, bbox = NULL, mms
 #* @serializer contentType list(type="application/json")
 #* @get /ship_segments
 function(date_beg = NULL, date_end = NULL, bbox = NULL, mmsi = NULL, simplify = NULL){
-  # if(missing(date_beg)) date_beg = NULL
-  # if(missing(date_end)) date_end = NULL
-  # if(missing(bbox))         bbox = NULL
-  # if(missing(mmsi))         mmsi = NULL
-  # if(missing(simplify)) simplify = NULL
-  
   get_ship_segments(date_beg, date_end, bbox, mmsi, simplify)
 }
 
