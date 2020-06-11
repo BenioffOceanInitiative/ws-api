@@ -2,6 +2,7 @@ import pandas as pd
 from google.cloud  import bigquery
 from google.oauth2 import service_account
 from sqlalchemy    import create_engine
+from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 from datetime import date, datetime, timedelta, timezone
 from dateutil.relativedelta import relativedelta
 from dateutil import tz
@@ -25,7 +26,14 @@ with open('/home/admin/ws_admin_pass.txt') as f:
 pg_engine = create_engine('postgresql+psycopg2://admin:' + passwd + '@ws-postgis:5432/gis')
 pg_con    = pg_engine.connect()
 
-def bq2pg_segs(date_beg, date_end, replace_segs = False):
+# postgres raw connection without transaction (so autocommit on) for vacuuming db
+pg_raw = pg_engine.raw_connection()
+pg_raw.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+pg_raw_cursor = pg_raw.cursor()
+
+def bq2pg_segs_date(date_beg, date_end, replace_segs = False):
+  # for initial data loading, one month at a time
+  
   # i_date   = 0
   # date_beg = '2017-01-01'
   # date_end = '2017-02-01'
@@ -51,6 +59,67 @@ def bq2pg_segs(date_beg, date_end, replace_segs = False):
     df.to_sql('segs', con=pg_engine, schema='public', if_exists='append', index=False)
     
   # TODO: log dates done in BQ
+
+def load_bq2pg_latest():
+  
+  timestamp_last = pg_con.execute('SELECT max(timestamp_end) AS timestamp_last FROM segs').fetchall()[0].timestamp_last
+  date_last      = pg_con.execute('SELECT max(date) AS date_last FROM segs').fetchall()[0].date_last
+  
+  date_last_m1       = date_last - relativedelta(days = 1) # backup one day
+  date_last_m1_str   = date_last_m1.strftime(     '%Y-%m-%d')
+  timestamp_last_str = timestamp_last.strftime('%Y-%m-%d %H:%M:%S')
+  sql_timestamp = f"timestamp_end > '{timestamp_last_str}' AND date > '{date_last_m1_str}'"
+  
+  sql = f"""
+    SELECT * EXCEPT (geom), ST_ASTEXT(geom) AS geom_txt 
+    FROM 
+    `benioff-ocean-initiative.whalesafe.gfw_segments_agg`
+    WHERE {sql_timestamp};
+    """
+  msg('  sql: ' + sql)
+  
+  df = bq_client.query(sql).to_dataframe()
+  df_rows = df.shape[0]
+  
+  if df_rows == 0:
+    msg(f'  0 new rows since {timestamp_last_str}')
+  else:
+    new_timestamp_last_str = max(df.timestamp_end).strftime('%Y-%m-%d %H:%M:%S')
+    msg(f'  inserting {str(df_rows)} rows: {timestamp_last_str} TO {new_timestamp_last_str}')
+    # print(df.info(memory_usage='deep'))
+    # df
+      
+    # append data to segs table in postgis
+    df.to_sql('segs', con=pg_engine, schema='public', if_exists='append', index=False)
+    
+    # update geom to use geom_txt where null
+    sql = """
+      UPDATE public.segs 
+        SET geom = ST_GeomFromText(geom_txt,4326)
+        WHERE geom IS NULL;
+      """
+    msg('  sql: ' + sql)
+    pg_con.execute(sql)
+    
+    # update simplification(s)
+    sql = """
+      UPDATE public.segs
+       SET geom_s1km = ST_Transform(ST_Simplify(ST_Transform(geom, 6423), 1000), 4326)
+       WHERE 
+          ST_GeometryType(geom) = 'ST_LineString' AND
+          geom_s1km IS NULL;
+      """
+    msg('  sql: ' + sql)
+    pg_con.execute(sql)
+    
+    # load nonspatial
+    msg("load_nonspatial()")
+    load_nonspatial()
+    
+    # update simplification(s)
+    sql = "VACUUM(ANALYZE, VERBOSE)"
+    msg('  sql: ' + sql)
+    pg_raw_cursor.execute(sqlmap
 
 def pg_spatialize_segs():
   sql = """
@@ -187,24 +256,30 @@ def vacuum_db():
 
 
 def load_nonspatial():
-  load_tbl('whalesafe_ais.mmsi_cooperation_stats', 'ship_stats_annual')
-  load_tbl('whalesafe_ais.ship_stats'            , 'ship_stats_monthly')
-  load_tbl('whalesafe_ais.operator_stats'        , 'operator_stats'    , fld_indexes = ['operator','year'])
+  load_tbl('stats.ship_stats_annual'     , 'ship_stats_annual'     , fld_indexes = ['mmsi','operator','year'])
+  load_tbl('stats.ship_stats_monthly'    , 'ship_stats_monthly'    , fld_indexes = ['mmsi','operator','year','month'])
+  load_tbl('stats.operator_stats_annual' , 'operator_stats_annual' , fld_indexes = ['operator','year'])
+  load_tbl('stats.operator_stats_monthly', 'operator_stats_monthly', fld_indexes = ['operator','year'])
 
   # operator_stats
 
 msg("__main__")
 if __name__ == "__main__":
-  msg("load_all_by_month()")
-  load_all_by_month() # 30 min for 2017-01-01 to 2020-06-04
-  msg("pg_spatialize_segs()")
-  pg_spatialize_segs()
-  msg("pg_simplify_segs()")
-  pg_simplify_segs()
-  msg("vacuum_db()")
-  vacuum_db()
-  msg("FINISHED!")
   
+  # initial load
+  # msg("load_all_by_month()")
+  # load_all_by_month() # 30 min for 2017-01-01 to 2020-06-04
+  # msg("pg_spatialize_segs()")
+  # pg_spatialize_segs()
+  # msg("pg_simplify_segs()")
+  # pg_simplify_segs()
+  # msg("vacuum_db()")
+  # vacuum_db()
+  # msg("FINISHED!")
+
+  msg("load_bq2pg_latest()")
+  load_bq2pg_latest()
+
   # sudo su - root
   # py=/home/admin/.local/share/r-miniconda/envs/r-reticulate/bin/python; script_py=/home/admin/github/ws-api/bq2pg.py; out_txt=/home/admin/github/ws-api/bq2pg_out.txt
   # py=/usr/bin/python3; script_py=/home/admin/github/ws-api/bq2pg.py; out_txt=/home/admin/github/ws-api/bq2pg_out.txt
@@ -213,4 +288,17 @@ if __name__ == "__main__":
   # cat $out_txt
   #print("test print()")
   #msg("test msg()")
+  
+  # set up cron job in Debian 10 (per `lsb_release -a`)
+  # sudo su - root
+  # apt-get update; apt-get install cron; crontab -l
+  # crontab -e
+  # 0 18 * * * /usr/bin/python3 /home/admin/github/ws-api/bq2pg.py > /home/admin/github/ws-api/bq2pg_out.txt 2>&1
+  # apt install mailutils
+  
+  # TODO: add mail to cron by setting up whalesafe gmail account 
+  #       in 'less secure mode' and initialize in /etc/ssmtp/ssmtp.conf per: 
+  #         https://linuxhint.com/bash_script_send_email/
+  # mail -s 'whalesafe: cron bq2pg.py finished' ben@ecoquants.com <<< `cat /home/admin/github/ws-api/bq2pg_out.txt`
+  
   
