@@ -1,7 +1,7 @@
 # run API by sourcing this R script in RStudio
 library(plumber)
 
-plumber_r <- "/srv/ws-api/plumber.R"
+plumber_r <- "/home/admin/github/ws-api/plumber.R"
 
 plumber$new(plumber_r)$run(port=8888, host="0.0.0.0", swagger = T)
 
@@ -22,5 +22,5 @@ plumber$new(plumber_r)$run(port=8888, host="0.0.0.0", swagger = T)
 #   sudo kill -9 494
 # To start on rstudio.whalesafe.net in Terminal:
 #   sudo su root
-#   Rscript /srv/ws-api/run_api.R &
+#   Rscript /home/admin/github/ws-api/run_api.R &
 #   exit

@@ -11,7 +11,7 @@ import sys
 
 def msg(txt):
   #txt = '  158.208 seconds; expected completion: 2020-06-09 12:48:31.328176-07:00'
-  print(txt + " ~ " + str(datetime.now(tz.gettz('America/Los_Angeles'))))
+  print(txt + " ~ " + datetime.now(tz.gettz('America/Los_Angeles')).strftime('%Y-%m-%d %H:%M:%S PDT'))
   sys.stdout.flush()
 
 # bigquery connection
@@ -119,7 +119,7 @@ def load_bq2pg_latest():
     # update simplification(s)
     sql = "VACUUM(ANALYZE, VERBOSE)"
     msg('  sql: ' + sql)
-    pg_raw_cursor.execute(sqlmap
+    pg_raw_cursor.execute(sql)
 
 def pg_spatialize_segs():
   sql = """
@@ -240,6 +240,10 @@ def load_all_by_month():
 def load_tbl(bq_tbl, pg_tbl, fld_indexes = None):
   # bq_tbl = 'whalesafe_ais.operator_stats'; pg_tbl = 'operator_stats'; fld_indexes = ['operator','year']
   df = bq_client.query("SELECT * FROM " + bq_tbl).to_dataframe()
+  
+  # change all column names to lowercase 
+  df.columns = map(str.lower, df.columns)
+  
   pg_con.execute('DROP TABLE IF EXISTS ' + pg_tbl)
   df.to_sql(pg_tbl, con=pg_engine, schema='public', if_exists='replace', index=False)
   for fld in fld_indexes:
@@ -253,7 +257,6 @@ def vacuum_db():
   # So ran from rstudio.whalesafe.net Terminal:
   #   admin:~$ psql -h ws-postgis -U admin -W gis
   #   gis=# VACUUM(FULL, ANALYZE, VERBOSE);
-
 
 def load_nonspatial():
   load_tbl('stats.ship_stats_annual'     , 'ship_stats_annual'     , fld_indexes = ['mmsi','operator','year'])
@@ -280,6 +283,9 @@ if __name__ == "__main__":
   msg("load_bq2pg_latest()")
   load_bq2pg_latest()
 
+  # msg("load_nonspatial()")
+  # load_nonspatial()
+
   # sudo su - root
   # py=/home/admin/.local/share/r-miniconda/envs/r-reticulate/bin/python; script_py=/home/admin/github/ws-api/bq2pg.py; out_txt=/home/admin/github/ws-api/bq2pg_out.txt
   # py=/usr/bin/python3; script_py=/home/admin/github/ws-api/bq2pg.py; out_txt=/home/admin/github/ws-api/bq2pg_out.txt
@@ -291,10 +297,27 @@ if __name__ == "__main__":
   
   # set up cron job in Debian 10 (per `lsb_release -a`)
   # sudo su - root
-  # apt-get update; apt-get install cron; crontab -l
-  # crontab -e
-  # 0 18 * * * /usr/bin/python3 /home/admin/github/ws-api/bq2pg.py > /home/admin/github/ws-api/bq2pg_out.txt 2>&1
+  
+  # apt-get update; apt-get install cron rsyslog; sudo crontab -l
+  # vi /etc/rsyslog.conf
+  #   uncommented: #cron
+  #   commented:   module(load="imklog")
+  # sudo /etc/init.d/rsyslog restart
+  # sudo service cron restart
+  
+  # sudo apt-get install --reinstall rsyslog # /var/log/syslog
+  # switch default timezone from UTC to PDT:
+  #   sudo ln -sf /usr/share/zoneinfo/America/Los_Angeles /etc/localtime
+  # date
+  # sudo crontab -e
+  # 0 8 * * * /usr/bin/python3 /home/admin/github/ws-api/bq2pg.py > /home/admin/github/ws-api/bq2pg_out.txt 2>&1
+  # sudo service cron restart
+  # ls -latr /srv/ws-api
   # apt install mailutils
+  # command: date -R
+  #   Thu, 11 Jun 2020 16:44:47 +0000
+  #   Thu 11 Jun 2020 04:24:45 PM UTC - so using UTC
+  # sudo vi /etc/crontab
   
   # TODO: add mail to cron by setting up whalesafe gmail account 
   #       in 'less secure mode' and initialize in /etc/ssmtp/ssmtp.conf per: 
