@@ -115,24 +115,50 @@ function(){
   readBin(csv_file, "raw", n=file.info(csv_file)$size)
 }
 
-get_operators <- function(...){
+get_operator_stats_monthly <- function(...){
+  
+  sql_where <- args2where(
+    ..., 
+    args_numeric = c("year", "month"))
+  
+  sql <- glue("SELECT * FROM operator_stats_monthly {sql_where} ORDER BY operator, year, month")
+  
+  sql2db(sql)
+}
+#* return monthly operator stats as JSON
+#* @param operator eg "Foss Maritime Co"
+#* @param year eg "2019"
+#* @param month eg "6"
+#* @param month_grade eg "A"
+#* @get /operator_stats_monthly
+function(operator = NULL, year = NULL, month = NULL, month_grade = NULL){
+  get_operator_stats_monthly(
+    operator    = operator, 
+    year        = year,
+    month       = month,
+    month_grade = month_grade)
+}
 
+get_operator_stats_annual <- function(...){
+  
   sql_where <- args2where(
     ..., 
     args_numeric = c("year"))
   
-  sql <- glue("SELECT * FROM operator_stats {sql_where} ORDER BY operator, year")
+  sql <- glue("SELECT * FROM operator_stats_annual {sql_where} ORDER BY operator, year, grade")
   
   sql2db(sql)
 }
-#* return list of operators as JSON
+#* return monthly operator stats as JSON
 #* @param operator eg "Foss Maritime Co"
 #* @param year eg "2019"
-#* @get /operators
-function(operator = NULL, year = NULL){
-  get_operators(
+#* @param grade eg "A"
+#* @get /operator_stats_annual
+function(operator = NULL, year = NULL, grade = NULL){
+  get_operator_stats_annual(
     operator = operator, 
-    year     = year)
+    year     = year,
+    grade    = grade)
 }
 
 get_ship_stats_monthly <- function(...){
