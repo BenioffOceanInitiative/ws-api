@@ -322,6 +322,11 @@ if __name__ == "__main__":
   # RESTART CRONTAB SERVICE AFTER EDITING:
   # sudo service cron restart
   
+  # CHECK THAT CRONTAB IS WORKING:
+  # look for daily updated timestamp by running the following command and seeing local time:
+  #   ls -l /share/bq2pg_log.txt
+  # rw-r--r-- 1 admin root 9507 Jul  3 16:48 /share/bq2pg_log.txt
+  
   # TODO later: try getting emailed if error
   # ls -latr /srv/ws-api
   # apt install mailutils
