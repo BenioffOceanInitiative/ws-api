@@ -1,7 +1,7 @@
 # run API by sourcing this R script in RStudio
 library(plumber)
 
-plumber_r <- "/home/admin/github/ws-api/plumber.R"
+plumber_r <- "/share/github/ws-api/plumber.R"
 
 plumber$new(plumber_r)$run(port=8888, host="0.0.0.0", swagger = T)
 
@@ -13,7 +13,7 @@ plumber$new(plumber_r)$run(port=8888, host="0.0.0.0", swagger = T)
 #r$run(port=8888, host="0.0.0.0", swagger = T)
 
 # open in web browser: http://localhost:8888/__swagger__/
-# open in web browser: http://api.ships4whales.org
+# open in web browser: http://api.whalesafe.com
 # for more, see https://www.rplumber.io/docs
 
 # To stop on rstudio.whalesafe.net in Terminal:
@@ -22,5 +22,5 @@ plumber$new(plumber_r)$run(port=8888, host="0.0.0.0", swagger = T)
 #   sudo kill -9 494
 # To start on rstudio.whalesafe.net in Terminal:
 #   sudo su root
-#   Rscript /home/admin/github/ws-api/run_api.R &
+#   Rscript /share/github/ws-api/run_api.R &
 #   exit

@@ -153,6 +153,7 @@ def pg_simplify_segs():
       ADD COLUMN IF NOT EXISTS geom_s1km geometry(LINESTRING, 4326);
     UPDATE public.segs
      SET geom_s1km = ST_Transform(ST_Simplify(ST_Transform(geom, 6423), 1000), 4326)
+     -- TODO: consider using ST_SimplifyPreserveTopology() so we always get back LINESTRING, not POINT
      WHERE 
         ST_GeometryType(geom) = 'ST_LineString' AND
         geom_s1km IS NULL;
@@ -269,7 +270,17 @@ def load_nonspatial():
 msg("__main__")
 if __name__ == "__main__":
   
-  # initial load
+  # INITIAL DATA LOADING (OR RELOADING):
+  # TO RELOAD: 
+  # 1. Ensure table `benioff-ocean-initiative.whalesafe.gfw_segments_agg` 
+  #    in bigquery segs or otherwise exists in functions above
+  # 2. Comment the DAILY chunk below; Uncomment this chunk below to reload
+  # 3. In rstudio.whalesafe.com Terminal, 
+  #    run the command found in the crontab, which
+  #    executes this Python script __main__ section and 
+  #    appends STDOUT + STDERROR to the specified output log text file:
+  #    /usr/bin/python3 /share/github/ws-api/bq2pg.py >> /share/bq2pg_log.txt 2>&1
+  # 
   # msg("load_all_by_month()")
   # load_all_by_month() # 30 min for 2017-01-01 to 2020-06-04
   # msg("pg_spatialize_segs()")
@@ -280,48 +291,46 @@ if __name__ == "__main__":
   # vacuum_db()
   # msg("FINISHED!")
 
+  # DAILY:
   msg("load_bq2pg_latest()")
   load_bq2pg_latest()
 
-  # msg("load_nonspatial()")
-  # load_nonspatial()
+  msg("load_nonspatial()")
+  load_nonspatial()
 
-  # sudo su - root
-  # py=/home/admin/.local/share/r-miniconda/envs/r-reticulate/bin/python; script_py=/home/admin/github/ws-api/bq2pg.py; out_txt=/home/admin/github/ws-api/bq2pg_out.txt
-  # py=/usr/bin/python3; script_py=/home/admin/github/ws-api/bq2pg.py; out_txt=/home/admin/github/ws-api/bq2pg_out.txt
-  # echo py:$py $script_py:$script_py out_txt:$out_txt
-  # $py $script_py >$out_txt 2>&1 &
-  # cat $out_txt
-  #print("test print()")
-  #msg("test msg()")
-  
+  # INSTALL ONCE crontab on server:
   # set up cron job in Debian 10 (per `lsb_release -a`)
   # sudo su - root
-  
   # apt-get update; apt-get install cron rsyslog; sudo crontab -l
   # vi /etc/rsyslog.conf
   #   uncommented: #cron
   #   commented:   module(load="imklog")
   # sudo /etc/init.d/rsyslog restart
   # sudo service cron restart
-  
   # sudo apt-get install --reinstall rsyslog # /var/log/syslog
   # switch default timezone from UTC to PDT:
   #   sudo ln -sf /usr/share/zoneinfo/America/Los_Angeles /etc/localtime
   # date
+  
+  # SETUP CRONTAB ONCE:
+  # (OR use command to re-run after tweaking the __main__ section)
   # sudo crontab -e
-  # 0 8 * * * /usr/bin/python3 /home/admin/github/ws-api/bq2pg.py > /home/admin/github/ws-api/bq2pg_out.txt 2>&1
+  # 0 8 * * * /usr/bin/python3 /share/github/ws-api/bq2pg.py >> /share/bq2pg_log.txt 2>&1
+
+  # TODO: fix ERROR "Table benioff-ocean-initiative:whalesafe.gfw_segments_agg was not found in location US"
+  
+  # RESTART CRONTAB SERVICE AFTER EDITING:
   # sudo service cron restart
+  
+  # TODO later: try getting emailed if error
   # ls -latr /srv/ws-api
   # apt install mailutils
   # command: date -R
   #   Thu, 11 Jun 2020 16:44:47 +0000
   #   Thu 11 Jun 2020 04:24:45 PM UTC - so using UTC
   # sudo vi /etc/crontab
-  
   # TODO: add mail to cron by setting up whalesafe gmail account 
   #       in 'less secure mode' and initialize in /etc/ssmtp/ssmtp.conf per: 
   #         https://linuxhint.com/bash_script_send_email/
   # mail -s 'whalesafe: cron bq2pg.py finished' ben@ecoquants.com <<< `cat /home/admin/github/ws-api/bq2pg_out.txt`
-  
   
