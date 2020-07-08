@@ -145,20 +145,20 @@ get_operator_stats_annual <- function(...){
     ..., 
     args_numeric = c("year"))
   
-  sql <- glue("SELECT * FROM operator_stats_annual {sql_where} ORDER BY operator, year, grade")
+  sql <- glue("SELECT * FROM operator_stats_annual {sql_where} ORDER BY operator, year, year_grade")
   
   sql2db(sql)
 }
 #* return monthly operator stats as JSON
 #* @param operator eg "Foss Maritime Co"
 #* @param year eg "2019"
-#* @param grade eg "A"
+#* @param year_grade eg "A"
 #* @get /operator_stats_annual
-function(operator = NULL, year = NULL, grade = NULL){
+function(operator = NULL, year = NULL, year_grade = NULL){
   get_operator_stats_annual(
-    operator = operator, 
-    year     = year,
-    grade    = grade)
+    operator      = operator, 
+    year          = year,
+    year_grade    = year_grade)
 }
 
 get_ship_stats_monthly <- function(...){
@@ -172,15 +172,15 @@ get_ship_stats_monthly <- function(...){
   sql2db(sql)
 }
 #* return monthly ship stats as JSON
-#* @param operator
-#* @param operator_code
-#* @param mmsi
-#* @param name_of_ship
-#* @param shiptype
-#* @param ship_category
-#* @param year
-#* @param month
-#* @param month_grade
+#* @param operator eg "Foss Maritime Co"
+#* @param operator_code eg "196094"
+#* @param mmsi eg "477477200"
+#* @param name_of_ship eg "NOWOWIEJSKI"
+#* @param shiptype eg "Container Ship (Fully Cellular)"
+#* @param ship_category  eg "container"
+#* @param year eg "2020"
+#* @param month eg "6"
+#* @param month_grade eg "A"
 #* @get /ship_stats_monthly
 function(
   operator=NULL, operator_code=NULL, 
@@ -213,21 +213,20 @@ get_ship_stats_annual <- function(...){
   sql2db(sql)
 }
 #* return annual ship stats as JSON
-#* @param operator
-#* @param operator_code
-#* @param mmsi
-#* @param name_of_ship
-#* @param shiptype
-#* @param ship_category
-#* @param year
-#* @param cooperation_score
+#* @param operator eg "Maersk A/S"
+#* @param operator_code eg "5808451"
+#* @param mmsi eg "219210000"
+#* @param name_of_ship eg "COSCO HELLAS"
+#* @param shiptype eg "Crude Oil Tanker"
+#* @param ship_category eg "tanker"
+#* @param year eg "2019"
 #* @get /ship_stats_annual
 function(
   operator=NULL, operator_code=NULL, 
   mmsi=NULL, name_of_ship=NULL, 
   shiptype=NULL, ship_category=NULL, 
-  year=NULL, 
-  cooperation_score=NULL){
+  year=NULL
+  ){
   
   get_ship_stats_annual(
     operator      = operator, 
@@ -236,8 +235,7 @@ function(
     name_of_ship  = name_of_ship, 
     shiptype      = shiptype, 
     ship_category = ship_category, 
-    year          = year, 
-    cooperation_score = cooperation_score)
+    year          = year)
 }
 
 #* return table of ships (ship_stats_annual) as CSV

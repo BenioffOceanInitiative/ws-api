@@ -226,9 +226,9 @@ def load_all_by_month():
     
     t0 = datetime.now()
     if (i_date == 0):
-      bq2pg_segs(date_beg, date_end, replace_segs = True)
+      bq2pg_segs_date(date_beg, date_end, replace_segs = True)
     else:
-      bq2pg_segs(date_beg, date_end)
+      bq2pg_segs_date(date_beg, date_end)
     t_secs = (datetime.now() - t0).total_seconds()
     
     t_now          = datetime.now(tz_pt)
@@ -288,7 +288,7 @@ if __name__ == "__main__":
   # msg("pg_simplify_segs()")
   # pg_simplify_segs()
   # msg("vacuum_db()")
-  # vacuum_db()
+  # vacuum_db() # VACUUM cannot run inside a transaction block (2020-07-07_SG)
   # msg("FINISHED!")
 
   # DAILY:
