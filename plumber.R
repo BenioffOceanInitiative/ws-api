@@ -313,7 +313,9 @@ get_ship_segments <- function(date_beg = NULL, date_end = NULL, bbox = NULL, mms
       SELECT {flds} 
       FROM public.segs 
       WHERE 
-        ST_GeometryType(geom) = 'ST_LineString' {sql_where}) tbl;")
+        ST_GeometryType(geom) = 'ST_LineString' {sql_where} 
+      OR 
+        ST_GeometryType(geom) = 'ST_MultiLineString' {sql_where}) tbl;")
   
   message(glue(
     "{Sys.time()}: dbGetQuery() begin

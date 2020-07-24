@@ -107,6 +107,9 @@ def load_bq2pg_latest():
        SET geom_s1km = ST_Transform(ST_Simplify(ST_Transform(geom, 6423), 1000), 4326)
        WHERE 
           ST_GeometryType(geom) = 'ST_LineString' AND
+          geom_s1km IS NULL
+          OR
+          ST_GeometryType(geom) = 'ST_MultiLineString' AND
           geom_s1km IS NULL;
       """
     msg('  sql: ' + sql)
@@ -150,12 +153,16 @@ def pg_simplify_segs():
       SET geom = ST_GeomFromText(geom_txt,4326)
       WHERE geom IS NULL;
     ALTER TABLE public.segs
-      ADD COLUMN IF NOT EXISTS geom_s1km geometry(LINESTRING, 4326);
+      ADD COLUMN IF NOT EXISTS geom_s1km geometry(GEOMETRY, 4326);
     UPDATE public.segs
      SET geom_s1km = ST_Transform(ST_Simplify(ST_Transform(geom, 6423), 1000), 4326)
-     -- TODO: consider using ST_SimplifyPreserveTopology() so we always get back LINESTRING, not POINT
+     -- TODO: consider using ST_SimplifyPreserveTopology() so we always get back LINESTRING OR MULTILINESTRING, not POINT
+     -- TODO 2: ST_LINEMERGE, etc. to handle MULTILINESTRING's made in BigQuery
      WHERE 
         ST_GeometryType(geom) = 'ST_LineString' AND
+        geom_s1km IS NULL
+        OR
+        ST_GeometryType(geom) = 'ST_MultiLineString' AND
         geom_s1km IS NULL;
     CREATE INDEX idx_segs_geom_s1km ON public.segs USING GIST (geom_s1km);
     """
@@ -189,7 +196,7 @@ def create_pg_function_for_geojson_features():
   $$ 
   LANGUAGE 'plpgsql' IMMUTABLE STRICT;
   """
-  #pg_con.execute(sql)
+  # pg_con.execute(sql)
   # ERROR: TypeError: 'dict' object does not support indexing
   # So executed sql in Terminal of rstudio.whalesafe.net after logging into db like so:
   #   sudo apt-get update
@@ -266,10 +273,13 @@ def load_nonspatial():
   load_tbl('stats.operator_stats_monthly', 'operator_stats_monthly', fld_indexes = ['operator','year'])
 
   # operator_stats
-
+# def check4multilines():
+#   pg_con.execute("select * from public.segs where geom like 'MULTI%%' LIMIT 1000").fetchall()
+#   pg_con.execute("select * from public.segs WHERE ST_GeometryType(geom) = 'ST_MultiLineString' limit 1000").fetchall()
+  
 msg("__main__")
 if __name__ == "__main__":
-  
+
   # INITIAL DATA LOADING (OR RELOADING):
   # TO RELOAD: 
   # 1. Ensure table `benioff-ocean-initiative.whalesafe.gfw_segments_agg` 
@@ -288,7 +298,7 @@ if __name__ == "__main__":
   # msg("pg_simplify_segs()")
   # pg_simplify_segs()
   # msg("vacuum_db()")
-  # vacuum_db() # VACUUM cannot run inside a transaction block (2020-07-07_SG)
+  # # vacuum_db() # VACUUM cannot run inside a transaction block (2020-07-07_SG)
   # msg("FINISHED!")
 
   # DAILY:
@@ -316,7 +326,7 @@ if __name__ == "__main__":
   # (OR use command to re-run after tweaking the __main__ section)
   # sudo crontab -e
   # 0 8 * * * /usr/bin/python3 /share/github/ws-api/bq2pg.py >> /share/bq2pg_log.txt 2>&1
-
+  # When done editing, hit 'esc' key, then type ':wq' (write & quit)
   # TODO: fix ERROR "Table benioff-ocean-initiative:whalesafe.gfw_segments_agg was not found in location US"
   
   # RESTART CRONTAB SERVICE AFTER EDITING:
