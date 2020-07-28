@@ -102,13 +102,22 @@ def load_bq2pg_latest():
     pg_con.execute(sql)
     
     # update simplification(s)
+    # 'ST_LineString' simplification
     sql = """
       UPDATE public.segs
        SET geom_s1km = ST_Transform(ST_Simplify(ST_Transform(geom, 6423), 1000), 4326)
        WHERE 
           ST_GeometryType(geom) = 'ST_LineString' AND
-          geom_s1km IS NULL
-          OR
+          geom_s1km IS NULL;
+      """
+    msg('  sql: ' + sql)
+    pg_con.execute(sql)
+    
+    # 'ST_MultiLineString' linemerge & simplification
+    sql = """
+      UPDATE public.segs
+       SET geom_s1km = ST_Transform(ST_Simplify(ST_Transform(ST_LineMerge(ST_SnapToGrid(geom, 0.00001)), 6423), 1000), 4326)
+       WHERE
           ST_GeometryType(geom) = 'ST_MultiLineString' AND
           geom_s1km IS NULL;
       """
@@ -152,19 +161,29 @@ def pg_simplify_segs():
     UPDATE public.segs 
       SET geom = ST_GeomFromText(geom_txt,4326)
       WHERE geom IS NULL;
+    --ALTER TABLE public.segs
+      --DROP COLUMN IF EXISTS geom_s1km;
     ALTER TABLE public.segs
       ADD COLUMN IF NOT EXISTS geom_s1km geometry(GEOMETRY, 4326);
     UPDATE public.segs
      SET geom_s1km = ST_Transform(ST_Simplify(ST_Transform(geom, 6423), 1000), 4326)
      -- TODO: consider using ST_SimplifyPreserveTopology() so we always get back LINESTRING OR MULTILINESTRING, not POINT
-     -- TODO 2: ST_LINEMERGE, etc. to handle MULTILINESTRING's made in BigQuery
      WHERE 
-        ST_GeometryType(geom) = 'ST_LineString' AND
+        ST_GeometryType(geom) = 'ST_LineString' 
+     AND
         geom_s1km IS NULL
-        OR
-        ST_GeometryType(geom) = 'ST_MultiLineString' AND
-        geom_s1km IS NULL;
-    CREATE INDEX idx_segs_geom_s1km ON public.segs USING GIST (geom_s1km);
+        ;
+        
+    UPDATE public.segs
+     SET geom_s1km = ST_Transform(ST_Simplify(ST_Transform(ST_LineMerge(ST_SnapToGrid(geom, 0.00001)), 6423), 1000), 4326)
+     -- TODO: consider using ST_SimplifyPreserveTopology() so we always get back LINESTRING OR MULTILINESTRING, not POINT
+     WHERE 
+        ST_GeometryType(geom) = 'ST_MultiLineString' 
+     AND
+        geom_s1km IS NULL
+        ;
+    DROP INDEX IF EXISTS idx_segs_geom_s1km;    
+    CREATE INDEX IF NOT EXISTS idx_segs_geom_s1km ON public.segs USING GIST (geom_s1km);
     """
   pg_con.execute(sql)
 
