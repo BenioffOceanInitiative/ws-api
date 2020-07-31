@@ -8,6 +8,7 @@ from dateutil.relativedelta import relativedelta
 from dateutil import tz
 import time
 import sys
+import subprocess
 
 def msg(txt):
   #txt = '  158.208 seconds; expected completion: 2020-06-09 12:48:31.328176-07:00'
@@ -17,6 +18,7 @@ def msg(txt):
 # bigquery connection
 project_id       = 'benioff-ocean-initiative'
 credentials_json = '/home/admin/Benioff Ocean Initiative-454f666d1896.json'
+# lgnd-website-service-account: https://console.cloud.google.com/iam-admin/serviceaccounts/details/114569616080626900590;edit=true?previousPage=%2Fapis%2Fcredentials%3Fproject%3Dbenioff-ocean-initiative%26authuser%3D1&authuser=1&project=benioff-ocean-initiative
 credentials      = service_account.Credentials.from_service_account_file(credentials_json)
 bq_client        = bigquery.Client(credentials=credentials, project=project_id)
 
@@ -266,7 +268,9 @@ def load_all_by_month():
 
 def load_tbl(bq_tbl, pg_tbl, fld_indexes = None):
   # bq_tbl = 'whalesafe_ais.operator_stats'; pg_tbl = 'operator_stats'; fld_indexes = ['operator','year']
-  df = bq_client.query("SELECT * FROM " + bq_tbl).to_dataframe()
+  df = bq_client.query("SELECT * FROM " + bq_tbl ).to_dataframe()
+  # Use linebelow to switch to whalesafe_v2 stats. Delete + " WHERE vsr_region = 'sc' " to get sf and sc.
+  # df = bq_client.query("SELECT * FROM " + bq_tbl + " WHERE vsr_region = 'sc' ").to_dataframe()
   
   # change all column names to lowercase 
   df.columns = map(str.lower, df.columns)
@@ -290,8 +294,17 @@ def load_nonspatial():
   load_tbl('stats.ship_stats_monthly'    , 'ship_stats_monthly'    , fld_indexes = ['mmsi','operator','year','month'])
   load_tbl('stats.operator_stats_annual' , 'operator_stats_annual' , fld_indexes = ['operator','year'])
   load_tbl('stats.operator_stats_monthly', 'operator_stats_monthly', fld_indexes = ['operator','year'])
-
-  # operator_stats
+  # Use 4 lines below, and comment 4 above to switch to whalesafe_v2
+  # load_tbl('whalesafe_v2.ship_stats_annual'     , 'ship_stats_annual'     , fld_indexes = ['mmsi','operator','year'])
+  # load_tbl('whalesafe_v2.ship_stats_monthly'    , 'ship_stats_monthly'    , fld_indexes = ['mmsi','operator','year','month'])
+  # load_tbl('whalesafe_v2.operator_stats_annual' , 'operator_stats_annual' , fld_indexes = ['operator','year'])
+  # load_tbl('whalesafe_v2.operator_stats_monthly', 'operator_stats_monthly', fld_indexes = ['operator','year'])
+  
+def disk_usage():
+  res = subprocess.run(["df"], capture_output=True)
+  msg(res.stdout.decode('ascii'))
+  
+# operator_stats
 # def check4multilines():
 #   pg_con.execute("select * from public.segs where geom like 'MULTI%%' LIMIT 1000").fetchall()
 #   pg_con.execute("select * from public.segs WHERE ST_GeometryType(geom) = 'ST_MultiLineString' limit 1000").fetchall()
@@ -326,6 +339,9 @@ if __name__ == "__main__":
 
   msg("load_nonspatial()")
   load_nonspatial()
+
+  msg("disk_usage()")
+  disk_usage()
 
   # INSTALL ONCE crontab on server:
   # set up cron job in Debian 10 (per `lsb_release -a`)
