@@ -130,13 +130,15 @@ get_operator_stats_monthly <- function(...){
 #* @param year eg "2019"
 #* @param month eg "6"
 #* @param month_grade eg "A"
+#* @param vsr_region eg "sf" or "sc"
 #* @get /operator_stats_monthly
-function(operator = NULL, year = NULL, month = NULL, month_grade = NULL){
+function(operator = NULL, year = NULL, month = NULL, month_grade = NULL, vsr_region = NULL){
   get_operator_stats_monthly(
     operator    = operator, 
     year        = year,
     month       = month,
-    month_grade = month_grade)
+    month_grade = month_grade,
+    vsr_region  = vsr_region)
 }
 
 get_operator_stats_annual <- function(...){
@@ -153,12 +155,14 @@ get_operator_stats_annual <- function(...){
 #* @param operator eg "Foss Maritime Co"
 #* @param year eg "2019"
 #* @param year_grade eg "A"
+#* @param vsr_region eg "sf" or "sc"
 #* @get /operator_stats_annual
-function(operator = NULL, year = NULL, year_grade = NULL){
+function(operator = NULL, year = NULL, year_grade = NULL, vsr_region = NULL){
   get_operator_stats_annual(
     operator      = operator, 
     year          = year,
-    year_grade    = year_grade)
+    year_grade    = year_grade,
+    vsr_region  = vsr_region)
 }
 
 get_ship_stats_monthly <- function(...){
@@ -181,13 +185,14 @@ get_ship_stats_monthly <- function(...){
 #* @param year eg "2020"
 #* @param month eg "6"
 #* @param month_grade eg "A"
+#* @param vsr_region eg "sf" or "sc"
 #* @get /ship_stats_monthly
 function(
   operator=NULL, operator_code=NULL, 
   mmsi=NULL, name_of_ship=NULL, 
   shiptype=NULL, ship_category=NULL, 
   year=NULL, month=NULL,
-  month_grade=NULL){
+  month_grade=NULL, vsr_region = NULL){
   
   get_ship_stats_monthly(
     operator      = operator,
@@ -198,7 +203,8 @@ function(
     ship_category = ship_category,
     year          = year,
     month         = month,
-    month_grade   = month_grade)
+    month_grade   = month_grade,
+    vsr_region    = vsr_region)
 
 }
 
@@ -220,12 +226,13 @@ get_ship_stats_annual <- function(...){
 #* @param shiptype eg "Crude Oil Tanker"
 #* @param ship_category eg "tanker"
 #* @param year eg "2019"
+#* @param vsr_region eg "sf" or "sc"
 #* @get /ship_stats_annual
 function(
   operator=NULL, operator_code=NULL, 
   mmsi=NULL, name_of_ship=NULL, 
   shiptype=NULL, ship_category=NULL, 
-  year=NULL
+  year=NULL, vsr_region = NULL
   ){
   
   get_ship_stats_annual(
@@ -235,7 +242,8 @@ function(
     name_of_ship  = name_of_ship, 
     shiptype      = shiptype, 
     ship_category = ship_category, 
-    year          = year)
+    year          = year,
+    vsr_region    = vsr_region)
 }
 
 #* return table of ships (ship_stats_annual) as CSV
@@ -261,7 +269,7 @@ function(){
   readBin(csv_file, "raw", n=file.info(csv_file)$size)
 }
 
-get_ship_segments <- function(date_beg = NULL, date_end = NULL, bbox = NULL, mmsi = NULL, simplify = NULL){
+get_ship_segments <- function(date_beg = NULL, date_end = NULL, bbox = NULL, mmsi = NULL, region = NULL, simplify = NULL){
   # sql fields ----
   if (!is.null(simplify)){
     stopifnot(simplify %in% c("1km"))
@@ -270,7 +278,7 @@ get_ship_segments <- function(date_beg = NULL, date_end = NULL, bbox = NULL, mms
     fld_geom = "geom"
   }
   flds <- glue("
-    mmsi, date, seg_id, 
+    mmsi, date, seg_id, region, 
     speed_bin_num, avg_speed_knots_final, 
     total_distance_nm, 
     timestamp_beg, timestamp_end, 
@@ -282,6 +290,9 @@ get_ship_segments <- function(date_beg = NULL, date_end = NULL, bbox = NULL, mms
   
   if (!is.null(mmsi))
     where <- c(where, glue("mmsi = {mmsi}"))
+
+  if (!is.null(region))
+    where <- c(where, glue("region = '{region}'"))
   
   if (!is.null(date_beg))
     where <- c(where, glue("date >= '{date_beg}'"))
@@ -337,11 +348,12 @@ get_ship_segments <- function(date_beg = NULL, date_end = NULL, bbox = NULL, mms
 #* @param date_end end date, in format YYYY-mm-dd, eg 2019-10-07
 #* @param bbox bounding box in decimal degrees: lon_min,lat_min,lon_max,lat_max
 #* @param mmsi AIS ship ID, eg 248896000
+#* @param region AIS segment region, eg sc, cc, sf
 #* @param simplify simplification specifying tolerance (pre-rendered): 1km
 #* @serializer contentType list(type="application/json")
 #* @get /ship_segments
-function(date_beg = NULL, date_end = NULL, bbox = NULL, mmsi = NULL, simplify = NULL){
-  get_ship_segments(date_beg, date_end, bbox, mmsi, simplify)
+function(date_beg = NULL, date_end = NULL, bbox = NULL, mmsi = NULL, region = NULL, simplify = NULL){
+  get_ship_segments(date_beg, date_end, bbox, mmsi, region, simplify)
 }
 
 #* redirect to the swagger interface 

@@ -44,7 +44,7 @@ def bq2pg_segs_date(date_beg, date_end, replace_segs = False):
   sql = f"""
     SELECT * EXCEPT (geom), ST_ASTEXT(geom) AS geom_txt 
     FROM 
-    `benioff-ocean-initiative.whalesafe.gfw_segments_agg`
+    `benioff-ocean-initiative.whalesafe_v2.ais_segments_agg`
     WHERE {sql_date};
     """
   msg('  sql: ' + sql)
@@ -75,7 +75,7 @@ def load_bq2pg_latest():
   sql = f"""
     SELECT * EXCEPT (geom), ST_ASTEXT(geom) AS geom_txt 
     FROM 
-    `benioff-ocean-initiative.whalesafe.gfw_segments_agg`
+    `benioff-ocean-initiative.whalesafe_v2.ais_segments_agg`
     WHERE {sql_timestamp};
     """
   msg('  sql: ' + sql)
@@ -290,15 +290,16 @@ def vacuum_db():
   #   gis=# VACUUM(FULL, ANALYZE, VERBOSE);
 
 def load_nonspatial():
-  load_tbl('stats.ship_stats_annual'     , 'ship_stats_annual'     , fld_indexes = ['mmsi','operator','year'])
-  load_tbl('stats.ship_stats_monthly'    , 'ship_stats_monthly'    , fld_indexes = ['mmsi','operator','year','month'])
-  load_tbl('stats.operator_stats_annual' , 'operator_stats_annual' , fld_indexes = ['operator','year'])
-  load_tbl('stats.operator_stats_monthly', 'operator_stats_monthly', fld_indexes = ['operator','year'])
+  # load_tbl('stats.ship_stats_annual'     , 'ship_stats_annual'     , fld_indexes = ['mmsi','operator','year'])
+  # load_tbl('stats.ship_stats_monthly'    , 'ship_stats_monthly'    , fld_indexes = ['mmsi','operator','year','month'])
+  # load_tbl('stats.operator_stats_annual' , 'operator_stats_annual' , fld_indexes = ['operator','year'])
+  # load_tbl('stats.operator_stats_monthly', 'operator_stats_monthly', fld_indexes = ['operator','year'])
   # Use 4 lines below, and comment 4 above to switch to whalesafe_v2
-  # load_tbl('whalesafe_v2.ship_stats_annual'     , 'ship_stats_annual'     , fld_indexes = ['mmsi','operator','year'])
-  # load_tbl('whalesafe_v2.ship_stats_monthly'    , 'ship_stats_monthly'    , fld_indexes = ['mmsi','operator','year','month'])
-  # load_tbl('whalesafe_v2.operator_stats_annual' , 'operator_stats_annual' , fld_indexes = ['operator','year'])
-  # load_tbl('whalesafe_v2.operator_stats_monthly', 'operator_stats_monthly', fld_indexes = ['operator','year'])
+  load_tbl('whalesafe_v2.ship_stats_annual'     , 'ship_stats_annual'     , fld_indexes = ['mmsi','operator','year'])
+  load_tbl('whalesafe_v2.ship_stats_monthly'    , 'ship_stats_monthly'    , fld_indexes = ['mmsi','operator','year','month'])
+  load_tbl('whalesafe_v2.operator_stats_annual' , 'operator_stats_annual' , fld_indexes = ['operator','year'])
+  load_tbl('whalesafe_v2.operator_stats_monthly', 'operator_stats_monthly', fld_indexes = ['operator','year'])
+  # load_tbl('whalesafe_v2.operator_stats_daily', 'operator_stats_daily', fld_indexes = ['operator','date'])
   
 def disk_usage():
   res = subprocess.run(["df"], capture_output=True)
@@ -314,7 +315,7 @@ if __name__ == "__main__":
 
   # INITIAL DATA LOADING (OR RELOADING):
   # TO RELOAD: 
-  # 1. Ensure table `benioff-ocean-initiative.whalesafe.gfw_segments_agg` 
+  # 1. Ensure table `benioff-ocean-initiative.whalesafe_v2.ais_segments_agg` 
   #    in bigquery segs or otherwise exists in functions above
   # 2. Comment the DAILY chunk below; Uncomment this chunk below to reload
   # 3. In rstudio.whalesafe.com Terminal, 
@@ -336,10 +337,10 @@ if __name__ == "__main__":
   # DAILY:
   msg("load_bq2pg_latest()")
   load_bq2pg_latest()
-
+  # 
   msg("load_nonspatial()")
   load_nonspatial()
-
+  # 
   msg("disk_usage()")
   disk_usage()
 
@@ -362,7 +363,8 @@ if __name__ == "__main__":
   # sudo crontab -e
   # 0 8 * * * /usr/bin/python3 /share/github/ws-api/bq2pg.py >> /share/bq2pg_log.txt 2>&1
   # When done editing, hit 'esc' key, then type ':wq' (write & quit)
-  # TODO: fix ERROR "Table benioff-ocean-initiative:whalesafe.gfw_segments_agg was not found in location US"
+  # nano edit, hit 'control' and 'X' to esc 
+  # TODO: fix ERROR "Table benioff-ocean-initiative:whalesafe_v2.ais_segments_agg was not found in location US"
   
   # RESTART CRONTAB SERVICE AFTER EDITING:
   # sudo service cron restart
