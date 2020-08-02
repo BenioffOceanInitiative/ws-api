@@ -290,9 +290,15 @@ get_ship_segments <- function(date_beg = NULL, date_end = NULL, bbox = NULL, mms
   
   if (!is.null(mmsi))
     where <- c(where, glue("mmsi = {mmsi}"))
-
-  if (!is.null(region))
-    where <- c(where, glue("region = '{region}'"))
+  
+  if (!is.null(region)){
+    # where <- c(where, glue("region = '{region}' "))
+    r <- strsplit(region, ",")[[1]]
+    r1 <- r[1]; r2 <- r[2]; r3 <- r[3]
+    where <- c(where, glue("region IN ('{r1}','{r2}','{r3}')"))
+  } else {
+    where <- c(where, glue("region IN ('sc','cc','sf')"))
+  } 
   
   if (!is.null(date_beg))
     where <- c(where, glue("date >= '{date_beg}'"))
