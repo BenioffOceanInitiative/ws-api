@@ -119,7 +119,7 @@ get_operator_stats_monthly <- function(...){
   
   sql_where <- args2where(
     ..., 
-    args_numeric = c("year", "month"))
+    args_numeric = c("year", "month", "exclude_category"))
   
   sql <- glue("SELECT * FROM operator_stats_monthly {sql_where} ORDER BY operator, year, month")
   
@@ -131,21 +131,23 @@ get_operator_stats_monthly <- function(...){
 #* @param month eg "6"
 #* @param month_grade eg "A"
 #* @param vsr_region eg "sf" or "sc"
+#* @param exclude_category eg 0 or 1
 #* @get /operator_stats_monthly
-function(operator = NULL, year = NULL, month = NULL, month_grade = NULL, vsr_region = NULL){
+function(operator = NULL, year = NULL, month = NULL, month_grade = NULL, vsr_region = NULL, exclude_category = NULL){
   get_operator_stats_monthly(
     operator    = operator, 
     year        = year,
     month       = month,
     month_grade = month_grade,
-    vsr_region  = vsr_region)
+    vsr_region  = vsr_region,
+    exclude_category = exclude_category)
 }
 
 get_operator_stats_annual <- function(...){
   
   sql_where <- args2where(
     ..., 
-    args_numeric = c("year"))
+    args_numeric = c("year", "exclude_category"))
   
   sql <- glue("SELECT * FROM operator_stats_annual {sql_where} ORDER BY operator, year, year_grade")
   
@@ -156,20 +158,22 @@ get_operator_stats_annual <- function(...){
 #* @param year eg "2019"
 #* @param year_grade eg "A"
 #* @param vsr_region eg "sf" or "sc"
+#* @param exclude_category eg 0 or 1
 #* @get /operator_stats_annual
-function(operator = NULL, year = NULL, year_grade = NULL, vsr_region = NULL){
+function(operator = NULL, year = NULL, year_grade = NULL, vsr_region = NULL, exclude_category = NULL){
   get_operator_stats_annual(
     operator      = operator, 
     year          = year,
     year_grade    = year_grade,
-    vsr_region  = vsr_region)
+    vsr_region  = vsr_region,
+    exclude_category = exclude_category)
 }
 
 get_ship_stats_monthly <- function(...){
 
   sql_where <- args2where(
     ...,
-    args_numeric = c("mmsi","operator_code","year","month"))
+    args_numeric = c("mmsi","operator_code","year","month", "exclude_category"))
 
   sql <- glue("SELECT * FROM ship_stats_monthly {sql_where} ORDER BY mmsi, year, month")
   
@@ -186,13 +190,14 @@ get_ship_stats_monthly <- function(...){
 #* @param month eg "6"
 #* @param month_grade eg "A"
 #* @param vsr_region eg "sf" or "sc"
+#* @param exclude_category eg 0 or 1
 #* @get /ship_stats_monthly
 function(
   operator=NULL, operator_code=NULL, 
   mmsi=NULL, name_of_ship=NULL, 
   shiptype=NULL, ship_category=NULL, 
   year=NULL, month=NULL,
-  month_grade=NULL, vsr_region = NULL){
+  month_grade=NULL, vsr_region = NULL, exclude_category = NULL){
   
   get_ship_stats_monthly(
     operator      = operator,
@@ -204,7 +209,8 @@ function(
     year          = year,
     month         = month,
     month_grade   = month_grade,
-    vsr_region    = vsr_region)
+    vsr_region    = vsr_region,
+    exclude_category = exclude_category)
 
 }
 
@@ -212,7 +218,7 @@ get_ship_stats_annual <- function(...){
   
   sql_where <- args2where(
     ..., 
-    args_numeric = c("mmsi","operator_code","year"))
+    args_numeric = c("mmsi","operator_code","year","exclude_category"))
   
   sql <- glue("SELECT * FROM ship_stats_annual {sql_where} ORDER BY mmsi, year")
   
@@ -227,12 +233,13 @@ get_ship_stats_annual <- function(...){
 #* @param ship_category eg "tanker"
 #* @param year eg "2019"
 #* @param vsr_region eg "sf" or "sc"
+#* @param exclude_category eg 0 or 1
 #* @get /ship_stats_annual
 function(
   operator=NULL, operator_code=NULL, 
   mmsi=NULL, name_of_ship=NULL, 
   shiptype=NULL, ship_category=NULL, 
-  year=NULL, vsr_region = NULL
+  year=NULL, vsr_region = NULL, exclude_category = NULL
   ){
   
   get_ship_stats_annual(
@@ -243,7 +250,8 @@ function(
     shiptype      = shiptype, 
     ship_category = ship_category, 
     year          = year,
-    vsr_region    = vsr_region)
+    vsr_region    = vsr_region,
+    exclude_category = exclude_category)
 }
 
 #* return table of ships (ship_stats_annual) as CSV

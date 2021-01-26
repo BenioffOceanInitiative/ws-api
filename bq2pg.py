@@ -295,10 +295,10 @@ def load_nonspatial():
   # load_tbl('stats.operator_stats_annual' , 'operator_stats_annual' , fld_indexes = ['operator','year'])
   # load_tbl('stats.operator_stats_monthly', 'operator_stats_monthly', fld_indexes = ['operator','year'])
   # Use 4 lines below, and comment 4 above to switch to whalesafe_v2
-  load_tbl('whalesafe_v2.ship_stats_annual'     , 'ship_stats_annual'     , fld_indexes = ['mmsi','operator','year'])
-  load_tbl('whalesafe_v2.ship_stats_monthly'    , 'ship_stats_monthly'    , fld_indexes = ['mmsi','operator','year','month'])
-  load_tbl('whalesafe_v2.operator_stats_annual' , 'operator_stats_annual' , fld_indexes = ['operator','year'])
-  load_tbl('whalesafe_v2.operator_stats_monthly', 'operator_stats_monthly', fld_indexes = ['operator','year'])
+  load_tbl('whalesafe_v2.ship_stats_annual'     , 'ship_stats_annual'     , fld_indexes = ['mmsi','operator','year','vsr_region','exclude_category'])
+  load_tbl('whalesafe_v2.ship_stats_monthly'    , 'ship_stats_monthly'    , fld_indexes = ['mmsi','operator','year','month','vsr_region','exclude_category'])
+  load_tbl('whalesafe_v2.operator_stats_annual' , 'operator_stats_annual' , fld_indexes = ['operator','year','vsr_region','exclude_category'])
+  load_tbl('whalesafe_v2.operator_stats_monthly', 'operator_stats_monthly', fld_indexes = ['operator','year','month','vsr_region','exclude_category'])
   # load_tbl('whalesafe_v2.operator_stats_daily', 'operator_stats_daily', fld_indexes = ['operator','date'])
   
 def disk_usage():
