@@ -44,7 +44,7 @@ def bq2pg_segs_date(date_beg, date_end, replace_segs = False):
   sql = f"""
     SELECT * EXCEPT (geom), ST_ASTEXT(geom) AS geom_txt 
     FROM 
-    `benioff-ocean-initiative.whalesafe_v2.ais_segments_agg`
+    `benioff-ocean-initiative.whalesafe_v3.ais_segments_agg`
     WHERE {sql_date};
     """
   msg('  sql: ' + sql)
@@ -75,7 +75,7 @@ def load_bq2pg_latest():
   sql = f"""
     SELECT * EXCEPT (geom), ST_ASTEXT(geom) AS geom_txt 
     FROM 
-    `benioff-ocean-initiative.whalesafe_v2.ais_segments_agg`
+    `benioff-ocean-initiative.whalesafe_v3.ais_segments_agg`
     WHERE {sql_timestamp};
     """
   msg('  sql: ' + sql)
@@ -269,7 +269,7 @@ def load_all_by_month():
 def load_tbl(bq_tbl, pg_tbl, fld_indexes = None):
   # bq_tbl = 'whalesafe_ais.operator_stats'; pg_tbl = 'operator_stats'; fld_indexes = ['operator','year']
   df = bq_client.query("SELECT * FROM " + bq_tbl ).to_dataframe()
-  # Use linebelow to switch to whalesafe_v2 stats. Delete + " WHERE vsr_region = 'sc' " to get sf and sc.
+  # Use linebelow to switch to whalesafe_v3 stats. Delete + " WHERE vsr_region = 'sc' " to get sf and sc.
   # df = bq_client.query("SELECT * FROM " + bq_tbl + " WHERE vsr_region = 'sc' ").to_dataframe()
   
   # change all column names to lowercase 
@@ -294,12 +294,12 @@ def load_nonspatial():
   # load_tbl('stats.ship_stats_monthly'    , 'ship_stats_monthly'    , fld_indexes = ['mmsi','operator','year','month'])
   # load_tbl('stats.operator_stats_annual' , 'operator_stats_annual' , fld_indexes = ['operator','year'])
   # load_tbl('stats.operator_stats_monthly', 'operator_stats_monthly', fld_indexes = ['operator','year'])
-  # Use 4 lines below, and comment 4 above to switch to whalesafe_v2
-  load_tbl('whalesafe_v2.ship_stats_annual'     , 'ship_stats_annual'     , fld_indexes = ['mmsi','operator','year','vsr_region','exclude_category'])
-  load_tbl('whalesafe_v2.ship_stats_monthly'    , 'ship_stats_monthly'    , fld_indexes = ['mmsi','operator','year','month','vsr_region','exclude_category'])
-  load_tbl('whalesafe_v2.operator_stats_annual' , 'operator_stats_annual' , fld_indexes = ['operator','year','vsr_region','exclude_category'])
-  load_tbl('whalesafe_v2.operator_stats_monthly', 'operator_stats_monthly', fld_indexes = ['operator','year','month','vsr_region','exclude_category'])
-  # load_tbl('whalesafe_v2.operator_stats_daily', 'operator_stats_daily', fld_indexes = ['operator','date'])
+  # Use 4 lines below, and comment 4 above to switch to whalesafe_v3
+  load_tbl('whalesafe_v3.ship_stats_annual'     , 'ship_stats_annual'     , fld_indexes = ['mmsi','operator','year','vsr_region','exclude_category'])
+  load_tbl('whalesafe_v3.ship_stats_monthly'    , 'ship_stats_monthly'    , fld_indexes = ['mmsi','operator','year','month','vsr_region','exclude_category'])
+  load_tbl('whalesafe_v3.operator_stats_annual' , 'operator_stats_annual' , fld_indexes = ['operator','year','vsr_region','exclude_category'])
+  load_tbl('whalesafe_v3.operator_stats_monthly', 'operator_stats_monthly', fld_indexes = ['operator','year','month','vsr_region','exclude_category'])
+  # load_tbl('whalesafe_v3.operator_stats_daily', 'operator_stats_daily', fld_indexes = ['operator','date'])
   
 def disk_usage():
   res = subprocess.run(["df"], capture_output=True)
@@ -315,23 +315,23 @@ if __name__ == "__main__":
 
   # INITIAL DATA LOADING (OR RELOADING):
   # TO RELOAD: 
-  # 1. Ensure table `benioff-ocean-initiative.whalesafe_v2.ais_segments_agg` 
+  # 1. Ensure table `benioff-ocean-initiative.whalesafe_v3.ais_segments_agg` 
   #    in bigquery segs or otherwise exists in functions above
-  # 2. Comment the DAILY chunk below; Uncomment this chunk below to reload
+  # 2. Comment off the DAILY chunk below; Uncomment this chunk below to reload
   # 3. In rstudio.whalesafe.com Terminal, 
   #    run the command found in the crontab, which
   #    executes this Python script __main__ section and 
   #    appends STDOUT + STDERROR to the specified output log text file:
   #    /usr/bin/python3 /share/github/ws-api/bq2pg.py >> /share/bq2pg_log.txt 2>&1
-  # 
+  # RELOAD: 
   # msg("load_all_by_month()")
   # load_all_by_month() # 30 min for 2017-01-01 to 2020-06-04
   # msg("pg_spatialize_segs()")
   # pg_spatialize_segs()
   # msg("pg_simplify_segs()")
   # pg_simplify_segs()
-  # msg("vacuum_db()")
-  # # vacuum_db() # VACUUM cannot run inside a transaction block (2020-07-07_SG)
+  # # msg("vacuum_db()")
+  # # # vacuum_db() # VACUUM cannot run inside a transaction block (2020-07-07_SG)
   # msg("FINISHED!")
 
   # DAILY:
@@ -364,7 +364,7 @@ if __name__ == "__main__":
   # 0 8 * * * /usr/bin/python3 /share/github/ws-api/bq2pg.py >> /share/bq2pg_log.txt 2>&1
   # When done editing, hit 'esc' key, then type ':wq' (write & quit)
   # nano edit, hit 'control' and 'X' to esc 
-  # TODO: fix ERROR "Table benioff-ocean-initiative:whalesafe_v2.ais_segments_agg was not found in location US"
+  # TODO: fix ERROR "Table benioff-ocean-initiative:whalesafe_v3.ais_segments_agg was not found in location US"
   
   # RESTART CRONTAB SERVICE AFTER EDITING:
   # sudo service cron restart
